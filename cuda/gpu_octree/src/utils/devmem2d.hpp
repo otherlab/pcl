@@ -34,21 +34,33 @@
  *  Author: Anatoly Baskeheev, Itseez Ltd, (myname.mysurname@mycompany.com)
  */
 
-#ifndef PCL_GPU_OCTREE_UTILS_LANEID_HPP
-#define PCL_GPU_OCTREE_UTILS_LANEID_HPP
+#ifndef PCL_GPU_OCTREE_DEVMEM2D_HPP
+#define PCL_GPU_OCTREE_DEVMEM2D_HPP
+
+#include "pcl/gpu/common/device_array.hpp"
 
 namespace pcl
 {
     namespace device
     {
-        // Returns the warp lane ID of the calling thread
-        __device__ __forceinline__ unsigned int LaneId()
+        template<class T>
+        struct DevMem2D_
         {
-	        unsigned int ret;
-	        asm("mov.u32 %0, %laneid;" : "=r"(ret) );
-	        return ret;
-        }
+            int cols;
+            int rows;
+
+            T* data;
+            size_t step;
+
+            DevMem2D_() : cols(0), rows(0), data(0), step(0) {}
+
+            DevMem2D_(pcl::gpu::DeviceArray2D_<T>& array) : cols(array.cols()), rows(array.rows()), data(array.ptr()), step(array.step()) {}
+
+
+            __host__ __device__ __forceinline__ T* ptr(int y = 0) { return (T*)( (char*)data + y * step); }
+            __host__ __device__ __forceinline__ const T* ptr(int y = 0) const { return (const T*)( (const char*)data + y * step); }
+        };
     }
 }
 
-#endif /* PCL_GPU_OCTREE_UTILS_LANEID_HPP */
+#endif /* PCL_GPU_OCTREE_DEVMEM2D_HPP */

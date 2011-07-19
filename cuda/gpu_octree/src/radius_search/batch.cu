@@ -34,21 +34,37 @@
  *  Author: Anatoly Baskeheev, Itseez Ltd, (myname.mysurname@mycompany.com)
  */
 
-#ifndef PCL_GPU_OCTREE_UTILS_LANEID_HPP
-#define PCL_GPU_OCTREE_UTILS_LANEID_HPP
+#include "cuda_interface.hpp"
+#include "radius_search/batch_radiusSearch.hpp"
 
-namespace pcl
-{
-    namespace device
-    {
-        // Returns the warp lane ID of the calling thread
-        __device__ __forceinline__ unsigned int LaneId()
-        {
-	        unsigned int ret;
-	        asm("mov.u32 %0, %laneid;" : "=r"(ret) );
-	        return ret;
-        }
-    }
+#include "utils/funcattrib.hpp"
+
+
+void pcl::gpu::OctreeImpl::radiusSearchBatch(const DeviceArray_<float3>& queries, float radius, int max_results, BatchResult& output, BatchResultSizes& out_sizes)
+{        
+    pcl::device::batch_radius_search::Batch batch;
+          
+    batch.indices = indices;
+    batch.octree = octreeGlobal;
+
+    batch.queries_num = (int)queries.size();
+    batch.max_results = max_results;
+    
+    batch.output = output;                
+    batch.output_sizes = out_sizes;
+
+    batch.points  = points_sorted;
+    batch.queries = queries;
+    batch.radius  = radius;
+    
+    int block = pcl::device::batch_radius_search::KernelPolicy::CTA_SIZE;
+    int grid = (batch.queries_num + block - 1) / block;    
+
+    cudaSafeCall( cudaFuncSetCacheConfig(pcl::device::batch_radius_search::KernelB, cudaFuncCachePreferL1) );
+
+    pcl::device::batch_radius_search::KernelB<<<grid, block>>>(batch);
+    cudaSafeCall( cudaGetLastError() );
+    cudaSafeCall( cudaDeviceSynchronize() );
+
+    
 }
-
-#endif /* PCL_GPU_OCTREE_UTILS_LANEID_HPP */
