@@ -79,9 +79,8 @@ TEST(PCL_OctreeGPU, hostRadiusSearch)
     cloud_host->width = data.points.size();
     cloud_host->height = 1;
     cloud_host->points.resize (cloud_host->width * cloud_host->height);
-    for (size_t i = 0; i < cloud_host->points.size(); ++i)
-        cloud_host->points[i] = pcl::PointXYZ(data.points[i].x, data.points[i].y, data.points[i].z);
-
+    std::transform(data.points.begin(), data.points.end(),  cloud_host->points.begin(), DataGenerator::ConvPoint<pcl::PointXYZ>());
+    
     // build device octree
     pcl::gpu::Octree octree_device;                
     octree_device.setCloud(cloud_device);	    
