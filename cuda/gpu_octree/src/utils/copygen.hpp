@@ -89,6 +89,18 @@ namespace pcl
             for (int idx = laneId; idx < length; idx += STRIDE) 
                 out[idx] = in[idx];
         }
+
+        template<typename T>
+        __device__ __forceinline__ void SetWarpKernel(T value, T* out, int length)
+        {
+            int STRIDE = warpSize;
+            unsigned int laneId = LaneId();
+
+            for (int idx = laneId; idx < length; idx += STRIDE) 
+                out[idx] = value;
+        }
+
+
     }
 }
 
