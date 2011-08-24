@@ -238,6 +238,7 @@ template<class NodeData, class Real>
     else
     {
       int c, d;
+      c = 0;
       for (int i = 0; i < Cube::CORNERS; i++)
       {
         d = children[i].maxDepth ();
