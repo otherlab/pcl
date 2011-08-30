@@ -34,30 +34,15 @@
 *  Author: Anatoly Baskeheev, Itseez Ltd, (myname.mysurname@mycompany.com)
 */
 
-#ifndef PCL_GPU_DEVICE_EMULATION_HPP_
-#define PCL_GPU_DEVICE_EMULATION_HPP_
-
-#include "pcl/gpu/device/warp_reduce.hpp"
+#ifndef PCL_DEVICE_ASM_HPP_
+#define PCL_DEVICE_ASM_HPP_
 
 namespace pcl
 {
-	namespace device
-	{
-		struct Emulation
-		{
-			static __forceinline__ __device__ int ballot(int predicate, volatile int* cta_buffer)
-			{
-#if __CUDA_ARCH__ >= 200
-				(void)cta_buffer;
-				return __ballot(predicate);
-#else
-				int tid = threadIdx.x;				
-				cta_buffer[tid] = predicate ? (1 << (tid & 31)) : 0;
-				return warp_reduce(cta_buffer);
-#endif
-			}          
-		};
-	}
+    namespace device
+    {         
+       
+    }
 }
 
-#endif /* PCL_GPU_DEVICE_EMULATION_HPP_ */
+#endif /* PCL_DEVICE_ASM_HPP_ */
