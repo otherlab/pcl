@@ -34,11 +34,12 @@
  *  Author: Anatoly Baskeheev, Itseez Ltd, (myname.mysurname@mycompany.com)
  */
 
-#include<iostream>
-#include<stdlib.h>
-#include "pcl/gpu/utils/safe_call.hpp"
+#include "pcl/gpu/containers/initialization.hpp"
 
-void pcl::device::error(const char *error_string, const char *file, const int line, const char *func)
+#include <iostream>
+#include <stdlib.h>
+
+void pcl::gpu::error(const char *error_string, const char *file, const int line, const char *func)
 {	
     std::cout << "Error: " << error_string << "\t" << file << ":" << line << std::endl;
     exit(0);
