@@ -36,53 +36,42 @@
 
 #pragma once
 
-#include <pcl/gpu/containers/device_array.h>
-#include <pcl/gpu/containers/kernel_containers.h>
-
-#include <boost/shared_ptr.hpp>
 #include <string>
-
+#include <boost/shared_ptr.hpp>
+#include <pcl/gpu/containers/kernel_containers.h>
 #include "pcl/gpu/kinfu/kinfu.h"
 
-namespace pcl
+
+/** \brief  class for  RGB-D SLAM Dataset and Benchmark
+  * \author Anatoly Baskeheev, Itseez Ltd, (myname.mysurname@mycompany.com)
+  */
+class Evaluation
 {
-  namespace gpu
-  {
-    class CaptureOpenNI
-    {
 public:
-    typedef KinfuTracker::PixelRGB RGB;
+  typedef boost::shared_ptr<Evaluation> Ptr; 
+  typedef pcl::gpu::KinfuTracker::PixelRGB RGB;
 
-    enum { PROP_OPENNI_REGISTRATION_ON  = 104 };
+  Evaluation(const std::string& folder);
+
+  bool grab (double stamp, pcl::gpu::PtrStepSz<const RGB>& rgb24);
+  bool grab (double stamp, pcl::gpu::PtrStepSz<const unsigned short>& depth);
+  bool grab (double stamp, pcl::gpu::PtrStepSz<const unsigned short>& depth, pcl::gpu::PtrStepSz<const RGB>& rgb24);
+
+  const float fx, fy, cx, cy;
 
 
-    CaptureOpenNI();
-    CaptureOpenNI(int device);
-    CaptureOpenNI(const std::string& oni_filename);
+  void saveAllPoses(const pcl::gpu::KinfuTracker& kinfu, int frame_number = -1, const std::string& logfile = "kinfu_poses.txt") const;
 
-    void open(int device);
-    void open(const std::string& oni_filename);
-    void release();
-
-    ~CaptureOpenNI();
-
-    bool grab (PtrStepSz<const unsigned short>& depth, PtrStepSz<const RGB>& rgb24);
-
-    //parameters taken from camera/oni
-    float depth_focal_length_VGA;
-    float baseline;         // mm
-    int shadow_value;
-    int no_sample_value;
-    double pixelSize;         //mm
-
-    unsigned short max_depth;         //mm
-
-    bool setRegistration (bool value = false);
 private:
-    struct Impl;
-    boost::shared_ptr<Impl> impl_;
-    void getParams ();
+  std::string folder_;
+  bool visualization_;
 
-    };
-  }
+  std::vector< std::pair<double, std::string> > rgb_stamps_and_filenames_;
+  std::vector< std::pair<double, std::string> > depth_stamps_and_filenames_;
+
+  void readFile(const std::string& file, std::vector< std::pair<double, std::string> >& output);
+
+  struct Impl;
+  boost::shared_ptr<Impl> impl_;
 };
+

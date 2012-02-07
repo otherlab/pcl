@@ -34,55 +34,44 @@
  *  Author: Anatoly Baskeheev, Itseez Ltd, (myname.mysurname@mycompany.com)
  */
 
-#pragma once
+#ifndef PCL_GPU_CONTAINER_DEVICE_MEMORY_IMPL_HPP_
+#define PCL_GPU_CONTAINER_DEVICE_MEMORY_IMPL_HPP_
 
-#include <pcl/gpu/containers/device_array.h>
-#include <pcl/gpu/containers/kernel_containers.h>
+/////////////////////  Inline implementations of DeviceMemory ////////////////////////////////////////////
 
-#include <boost/shared_ptr.hpp>
-#include <string>
-
-#include "pcl/gpu/kinfu/kinfu.h"
-
-namespace pcl
+template<class T> inline       T* pcl::gpu::DeviceMemory::ptr()       { return (      T*)data_; }
+template<class T> inline const T* pcl::gpu::DeviceMemory::ptr() const { return (const T*)data_; }
+                        
+template <class U> inline pcl::gpu::DeviceMemory::operator pcl::gpu::PtrSz<U>() const
 {
-  namespace gpu
-  {
-    class CaptureOpenNI
-    {
-public:
-    typedef KinfuTracker::PixelRGB RGB;
+    PtrSz<U> result;
+    result.data = (U*)ptr<U>();
+    result.size = sizeBytes_/sizeof(U);
+    return result; 
+}
 
-    enum { PROP_OPENNI_REGISTRATION_ON  = 104 };
+/////////////////////  Inline implementations of DeviceMemory2D ////////////////////////////////////////////
+               
+template<class T>        T* pcl::gpu::DeviceMemory2D::ptr(int y_arg)       { return (      T*)((      char*)data_ + y_arg * step_); }
+template<class T>  const T* pcl::gpu::DeviceMemory2D::ptr(int y_arg) const { return (const T*)((const char*)data_ + y_arg * step_); }
+  
+template <class U> pcl::gpu::DeviceMemory2D::operator pcl::gpu::PtrStep<U>() const
+{
+    PtrStep<U> result;
+    result.data = (U*)ptr<U>();
+    result.step = step_;
+    return result;
+}
 
+template <class U> pcl::gpu::DeviceMemory2D::operator pcl::gpu::PtrStepSz<U>() const
+{
+    PtrStepSz<U> result;
+    result.data = (U*)ptr<U>();
+    result.step = step_;
+    result.cols = colsBytes_/sizeof(U);
+    result.rows = rows_;
+    return result;
+}
 
-    CaptureOpenNI();
-    CaptureOpenNI(int device);
-    CaptureOpenNI(const std::string& oni_filename);
+#endif /* PCL_GPU_CONTAINER_DEVICE_MEMORY_IMPL_HPP_ */ 
 
-    void open(int device);
-    void open(const std::string& oni_filename);
-    void release();
-
-    ~CaptureOpenNI();
-
-    bool grab (PtrStepSz<const unsigned short>& depth, PtrStepSz<const RGB>& rgb24);
-
-    //parameters taken from camera/oni
-    float depth_focal_length_VGA;
-    float baseline;         // mm
-    int shadow_value;
-    int no_sample_value;
-    double pixelSize;         //mm
-
-    unsigned short max_depth;         //mm
-
-    bool setRegistration (bool value = false);
-private:
-    struct Impl;
-    boost::shared_ptr<Impl> impl_;
-    void getParams ();
-
-    };
-  }
-};

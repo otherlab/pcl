@@ -34,55 +34,43 @@
  *  Author: Anatoly Baskeheev, Itseez Ltd, (myname.mysurname@mycompany.com)
  */
 
-#pragma once
+#ifndef PCL_GPU_CONTAINERS_INITIALISATION_HPP_
+#define PCL_GPU_CONTAINERS_INITIALISATION_HPP_
 
-#include <pcl/gpu/containers/device_array.h>
-#include <pcl/gpu/containers/kernel_containers.h>
-
-#include <boost/shared_ptr.hpp>
+#include "pcl/pcl_exports.h"
 #include <string>
-
-#include "pcl/gpu/kinfu/kinfu.h"
 
 namespace pcl
 {
-  namespace gpu
-  {
-    class CaptureOpenNI
+    namespace gpu
     {
-public:
-    typedef KinfuTracker::PixelRGB RGB;
+        /** \brief Returns number of Cuda device. */
+        PCL_EXPORTS int getCudaEnabledDeviceCount();
 
-    enum { PROP_OPENNI_REGISTRATION_ON  = 104 };
+        /** \brief Sets active device to work with. */
+        PCL_EXPORTS void setDevice(int device);
 
+        /** \brief Return devuce name for gived device. */
+        PCL_EXPORTS std::string getDeviceName(int device);
 
-    CaptureOpenNI();
-    CaptureOpenNI(int device);
-    CaptureOpenNI(const std::string& oni_filename);
+        /** \brief Prints infromatoin about given cuda deivce or about all deivces
+         *  \param deivce: if < 0 prints info for all devices, otherwise the function interpets is as device id.
+         */
+        void PCL_EXPORTS printCudaDeviceInfo(int device = -1);
 
-    void open(int device);
-    void open(const std::string& oni_filename);
-    void release();
+        /** \brief Prints infromatoin about given cuda deivce or about all deivces
+         *  \param deivce: if < 0 prints info for all devices, otherwise the function interpets is as device id.
+         */
+        void PCL_EXPORTS printShortCudaDeviceInfo(int device = -1);
 
-    ~CaptureOpenNI();
+        /** \brief Returns true if pre-Fermi generaton GPU. 
+          * \param device: device id to check, if < 0 checks current device.
+          */
+        bool PCL_EXPORTS checkIfPreFermiGPU(int device = -1);
 
-    bool grab (PtrStepSz<const unsigned short>& depth, PtrStepSz<const RGB>& rgb24);
+        /** \brief Error handler. All GPU functions call this to report an error. For internal use only */
+        void PCL_EXPORTS error(const char *error_string, const char *file, const int line, const char *func = "");        
+    }
+}
 
-    //parameters taken from camera/oni
-    float depth_focal_length_VGA;
-    float baseline;         // mm
-    int shadow_value;
-    int no_sample_value;
-    double pixelSize;         //mm
-
-    unsigned short max_depth;         //mm
-
-    bool setRegistration (bool value = false);
-private:
-    struct Impl;
-    boost::shared_ptr<Impl> impl_;
-    void getParams ();
-
-    };
-  }
-};
+#endif /* PCL_GPU_CONTAINERS_INITIALISATION_HPP_ */
