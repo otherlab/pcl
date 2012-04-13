@@ -35,15 +35,59 @@
  *
  */
   
-#include <pcl/ml/rgbd_2d_data_set.h>
+#ifndef PCL_ML_MULTI_CHANNEL_2D_COMPARISON_FEATURE_H_
+#define PCL_ML_MULTI_CHANNEL_2D_COMPARISON_FEATURE_H_
+
+#include <pcl/common/common.h>
 
 #include <istream>
 #include <ostream>
 
-void
-pcl::RGBD2DData::resize (const size_t width, const size_t height)
+namespace pcl
 {
-  data_.resize (width*height*4);
-  width_ = width;
-  height_ = height;
+
+  /** \brief Feature for comparing two sample points in 2D multi-channel data. */
+  template <class PointT>
+  class PCL_EXPORTS MultiChannel2DComparisonFeature
+  {
+  public:
+      /** \brief Constructor. */
+      MultiChannel2DComparisonFeature () : p1 (), p2 (), channel (0) {}
+      /** \brief Destructor. */
+      virtual ~MultiChannel2DComparisonFeature () {}
+
+      /** \brief Serializes the feature to a stream.
+        * \param[out] stream The destination for the serialization.
+        */
+      inline void 
+      serialize (std::ostream & stream) const
+      {
+        p1.serialize (stream);
+        p2.serialize (stream);
+        stream.write (reinterpret_cast<const char*> (&channel), sizeof (channel));
+      }
+
+      /** \brief Deserializes the feature from a stream. 
+        * \param[in] stream The source for the deserialization.
+        */
+      inline void 
+      deserialize (std::istream & stream)
+      {
+        p1.deserialize (stream);
+        p2.deserialize (stream);
+        stream.read (reinterpret_cast<char*> (&channel), sizeof (channel));
+      }
+
+    public:
+      /** \brief First sample point. */
+      PointT p1;
+      /** \brief Second sample point. */
+      PointT p2;
+
+      /** \brief Specifies which channel is used for comparison. */
+      unsigned char channel;
+  };
+
 }
+
+#endif

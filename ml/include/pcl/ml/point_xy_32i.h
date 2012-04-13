@@ -35,8 +35,8 @@
  *
  */
   
-#ifndef PCL_ML_RGBD_2D_COMPARISON_FEATURE_H_
-#define PCL_ML_RGBD_2D_COMPARISON_FEATURE_H_
+#ifndef PCL_ML_POINT_XY_32I_H_
+#define PCL_ML_POINT_XY_32I_H_
 
 #include <pcl/common/common.h>
 
@@ -53,7 +53,7 @@ namespace pcl
       /** \brief Constructor. */
       inline PointXY32i () : x (0), y (0) {}
       /** \brief Destructor. */
-      virtual ~PointXY32i () {}
+      inline virtual ~PointXY32i () {}
 
       /** \brief Serializes the point to the specified stream.
         * \param[out] The destination for the serialization.
@@ -82,65 +82,13 @@ namespace pcl
         * \param[in] max_y The maximum value for the y-coordinate of the point.
         */
       static PointXY32i 
-      randomPoint (const int min_x, const int max_x, const int min_y, const int max_y)
-      {
-        const float width = static_cast<float> (max_x - min_x);
-        const float height = static_cast<float> (max_y - min_y);
-
-        PointXY32i point;
-        point.x = static_cast<int> ( width * static_cast<float> (rand ()) / static_cast<float> (RAND_MAX) + static_cast<float> (min_x));
-        point.y = static_cast<int> ( height * static_cast<float> (rand ()) / static_cast<float> (RAND_MAX) + static_cast<float> (min_y));
-
-        return point;
-      }
+      randomPoint (const int min_x, const int max_x, const int min_y, const int max_y);
 
     public:
       /** \brief The x-coordinate of the point. */
       int x;
       /** \brief The y-coordinate of the point. */
       int y;
-  };
-
-  /** \brief Feature for comparing two sample points in 2D RGBD data. */
-  template <class PointT>
-  class PCL_EXPORTS RGBD2DComparisonFeature
-  {
-  public:
-      /** \brief Constructor. */
-      RGBD2DComparisonFeature () : p1 (), p2 (), channel (0) {}
-      /** \brief Destructor. */
-      virtual ~RGBD2DComparisonFeature () {}
-
-      /** \brief Serializes the feature to a stream.
-        * \param[out] stream The destination for the serialization.
-        */
-      inline void 
-      serialize (std::ostream & stream) const
-      {
-        p1.serialize (stream);
-        p2.serialize (stream);
-        stream.write (reinterpret_cast<const char*> (&channel), sizeof (channel));
-      }
-
-      /** \brief Deserializes the feature from a stream. 
-        * \param[in] stream The source for the deserialization.
-        */
-      inline void 
-      deserialize (std::istream & stream)
-      {
-        p1.deserialize (stream);
-        p2.deserialize (stream);
-        stream.read (reinterpret_cast<char*> (&channel), sizeof (channel));
-      }
-
-    public:
-      /** \brief First sample point. */
-      PointT p1;
-      /** \brief Second sample point. */
-      PointT p2;
-
-      /** \brief Specifies which channel is used for comparison. */
-      unsigned char channel;
   };
 
 }
