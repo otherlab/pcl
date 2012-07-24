@@ -34,72 +34,46 @@
  *
  */
 
-#ifndef PCL_MODELER_PCLMODELER_H_
-#define PCL_MODELER_PCLMODELER_H_
+#include <pcl/apps/modeler/cloud_mesh.h>
 
-#include <pcl/apps/modeler/qt.h>
-#include <map>
+#include <pcl/io/pcd_io.h>
 
-#include <vtkLODActor.h>
-#include <pcl/visualization/point_cloud_handlers.h>
-
-namespace pcl
+//////////////////////////////////////////////////////////////////////////////////////////////
+pcl::modeler::CloudMesh::CloudMesh()
 {
-  namespace modeler
-  {
-    class CloudActor;
-    class MainWindow;
-    class TreeItem;
-    class RenderWidget;
-
-    /** \brief PCL Modeler main class.
-      * \author Yangyan Li
-      * \ingroup apps
-      */
-    class PCL_EXPORTS PCLModeler : public QStandardItemModel
-    {
-      Q_OBJECT
-
-      public:
-        typedef pcl::visualization::PointCloudGeometryHandler<sensor_msgs::PointCloud2> GeometryHandler;
-        typedef GeometryHandler::Ptr GeometryHandlerPtr;
-        typedef GeometryHandler::ConstPtr GeometryHandlerConstPtr;
-
-        typedef pcl::visualization::PointCloudColorHandler<sensor_msgs::PointCloud2> ColorHandler;
-        typedef ColorHandler::Ptr ColorHandlerPtr;
-        typedef ColorHandler::ConstPtr ColorHandlerConstPtr;
-
-        /** \brief PCL Modeler constructor.
-          * \param[in] main_window pointer to the MainWindow
-          */
-        PCLModeler (MainWindow* main_window);
-
-        /** \brief PCL Modeler destructor. */
-        virtual ~PCLModeler ();
-
-        bool
-        openPointCloud(const std::string& filename);
-
-        void
-        closePointCloud();
-
-        static bool
-        concatenatePointCloud (const sensor_msgs::PointCloud2 &cloud, sensor_msgs::PointCloud2 &cloud_out);
-
-        bool
-        savePointCloud(const std::string& filename);
-
-      public slots:
-        void
-        slotUpdateRenderWidgetTitle();
-
-      private:
-        MainWindow*             main_window_;
-
-    };
-  }
+  cloud_.reset(new pcl::PointCloud<pcl::PointSurfel>());
 }
 
-#include <pcl/apps/modeler/impl/pcl_modeler.hpp>
+//////////////////////////////////////////////////////////////////////////////////////////////
+pcl::modeler::CloudMesh::~CloudMesh ()
+{
+}
 
-#endif // PCL_MODELER_PCLMODELER_H_
+//////////////////////////////////////////////////////////////////////////////////////////////
+std::vector<std::string>
+pcl::modeler::CloudMesh::getAvaiableFieldNames() const
+{
+  // TODO:
+  return (std::vector<std::string>());
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////
+bool
+pcl::modeler::CloudMesh::open(const std::string& filename)
+{
+  return (pcl::io::loadPCDFile(filename, *cloud_) == 0);
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////
+bool
+pcl::modeler::CloudMesh::save(const std::string& filename) const
+{
+  return (save(*cloud_, filename));
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////
+bool
+pcl::modeler::CloudMesh::save(const pcl::PointCloud<pcl::PointSurfel>& cloud, const std::string& filename)
+{
+  return (pcl::io::savePCDFile(filename, cloud, true) == 0);
+}

@@ -34,48 +34,77 @@
  *
  */
 
-#ifndef PCL_MODELER_COLOR_HANDLER_SWITCHER_H_
-#define PCL_MODELER_COLOR_HANDLER_SWITCHER_H_
+#ifndef PCL_MODELER_SCENE_TREE_H_
+#define PCL_MODELER_SCENE_TREE_H_
 
 #include <pcl/apps/modeler/qt.h>
-#include <pcl/visualization/point_cloud_handlers.h>
-
-class QColorDialog;
-
-// Forward Qt class declarations
-namespace Ui
-{
-  class ColorHandlerSwitcher;
-}
 
 namespace pcl
 {
   namespace modeler
   {
-    class CloudItem;
+    class CloudMeshItem;
+    class RenderWindowItem;
 
-    class ColorHandlerSwitcher : public QDialog
+    class SceneTree : public QTreeWidget
     {
       Q_OBJECT
 
       public:
-        ColorHandlerSwitcher(QWidget * parent = 0, Qt::WindowFlags f = 0);
-        ~ColorHandlerSwitcher();
+        SceneTree(QWidget * parent = 0);
+        ~SceneTree();
+
+        virtual QSize
+        sizeHint() const;
+
+        bool 
+        openPointCloud(const QString& filename);
+
+        bool 
+        savePointCloud(const QString& filename);
+
+      public slots:
+        // slots for file menu
+        void 
+        slotOpenPointCloud();
+
+        void 
+        slotImportPointCloud();
+
+        void
+        slotSavePointCloud();
+
+        void
+        slotClosePointCloud();
+
+        // slots for edit menu
+        void
+        slotDownSampleFilter();
+        void
+        slotEstimateNormal();
+        void
+        slotPoissonReconstruction();
+
+      signals:
+        void
+        fileOpened(const QString& filename);
 
       private:
-        Ui::ColorHandlerSwitcher            *ui_; // Designer form
-        QColorDialog*                       color_picker_;
+        template <class T> QList<T*>
+        selectedTypeItems() const;
 
-        void
-        setupAvaiableFieldNames();
+        QList<RenderWindowItem*>
+        selectedRenderWindowItems() const;
 
-      private slots:
-        void
-        slotSwitchColorHandler();
-        void
-        slotToggleColorPicker(const QString &text);
+        static void
+        closePointCloud(const QList<CloudMeshItem*>& items);
+
+        virtual void
+        contextMenuEvent(QContextMenuEvent *event);
     };
   }
 }
 
-#endif // PCL_MODELER_COLOR_HANDLER_SWITCHER_H_
+#include <pcl/apps/modeler/impl/scene_tree.hpp>
+
+#endif // PCL_MODELER_SCENE_TREE_H_

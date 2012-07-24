@@ -34,70 +34,31 @@
  *
  */
 
-#ifndef PCL_MODELER_TREE_ITEM_H_
-#define PCL_MODELER_TREE_ITEM_H_
+#ifndef PCL_MODELER_RENDER_WINDOW_H_
+#define PCL_MODELER_RENDER_WINDOW_H_
 
-#include <pcl/apps/modeler/qt.h>
-
-class QMenu;
-class QPoint;
+#include <QVTKWidget.h>
 
 namespace pcl
 {
   namespace modeler
   {
-    class MainWindow;
-
-    class TreeItem : public QStandardItem
+    class RenderWindow : public QVTKWidget
     {
       public:
-        TreeItem(MainWindow* main_window);
-        TreeItem(MainWindow* main_window, const QString & text);
-        TreeItem(MainWindow* main_window, const QIcon & icon, const QString & text);
-        virtual ~TreeItem();
+        RenderWindow(QWidget *parent = 0, Qt::WFlags flags = 0);
+        ~RenderWindow();
 
-        virtual TreeItem*
-        parent();
-
-        void
-        updateOnDataChanged();
-
-        virtual void
-        updateOnAboutToBeInserted();
-
-        virtual void
-        updateOnAboutToBeRemoved();
-
-        virtual void
-        updateOnInserted();
-
-        virtual void
-        updateOnRemoved();
-
-        virtual void
-        updateOnSelectionChange(bool selected);
-
-        void
-        showContextMenu(const QPoint* position);
+        virtual QSize
+        sizeHint() const {return QSize(512, 512);}
 
       protected:
-        virtual void
-        handleDataChange();
 
-        virtual void
-        prepareContextMenu(QMenu* menu) const;
-
+      private:
         void
-        forceChildCheckState(Qt::CheckState check_state);
-
-        void
-        updateParentCheckState();
-
-      protected:
-        MainWindow*     main_window_;
-        QStandardItem*  old_state_;
+        initRenderer();
     };
   }
 }
 
-#endif // PCL_MODELER_TREE_ITEM_H_
+#endif // PCL_MODELER_RENDER_WINDOW_H_
