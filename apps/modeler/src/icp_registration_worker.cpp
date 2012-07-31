@@ -34,63 +34,62 @@
  *
  */
 
-#include <pcl/apps/modeler/render_window_item.h>
-#include <pcl/apps/modeler/render_window.h>
+#include <pcl/apps/modeler/icp_registration_worker.h>
+#include <pcl/apps/modeler/parameter_dialog.h>
+#include <pcl/apps/modeler/parameter.h>
+#include <pcl/apps/modeler/cloud_mesh.h>
 #include <pcl/apps/modeler/cloud_mesh_item.h>
-#include <pcl/apps/modeler/main_window.h>
-
+#include <pcl/registration/icp.h>
 
 //////////////////////////////////////////////////////////////////////////////////////////////
-pcl::modeler::RenderWindowItem::RenderWindowItem(QTreeWidget * parent)
-  : QTreeWidgetItem(parent),
-  AbstractItem(),
-  render_window_(new RenderWindow(this))
+pcl::modeler::ICPRegistrationWorker::ICPRegistrationWorker(CloudMesh::PointCloudPtr cloud, const QList<CloudMeshItem*>& cloud_mesh_items, QWidget* parent)
+  : AbstractWorker(cloud_mesh_items, parent),
+  cloud_(cloud)
 {
 
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////
-pcl::modeler::RenderWindowItem::~RenderWindowItem()
+pcl::modeler::ICPRegistrationWorker::~ICPRegistrationWorker(void)
 {
-  render_window_->deleteLater();
-}
-
-//////////////////////////////////////////////////////////////////////////////////////////////
-bool
-pcl::modeler::RenderWindowItem::openPointCloud(const QString& filename)
-{
-  CloudMeshItem* cloud_mesh_item = new CloudMeshItem(this, filename.toStdString());
-  addChild(cloud_mesh_item);
-
-  if (!cloud_mesh_item->open())
-  {
-    removeChild(cloud_mesh_item);
-    delete cloud_mesh_item;
-    return (false);
-  }
-
-  treeWidget()->setCurrentItem(cloud_mesh_item);
-
-  return (true);
-}
-
-//////////////////////////////////////////////////////////////////////////////////////////////
-pcl::modeler::CloudMeshItem*
-pcl::modeler::RenderWindowItem::addPointCloud(CloudMesh::PointCloudPtr cloud)
-{
-  CloudMeshItem* cloud_mesh_item = new CloudMeshItem(this, cloud);
-  addChild(cloud_mesh_item);
-
-  treeWidget()->setCurrentItem(cloud_mesh_item);
-
-  return (cloud_mesh_item);
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////
 void
-pcl::modeler::RenderWindowItem::prepareContextMenu(QMenu* menu) const
+pcl::modeler::ICPRegistrationWorker::initParameters(CloudMeshItem* cloud_mesh_item)
 {
-  menu->addAction(ui()->actionOpenPointCloud);
-  if (treeWidget()->topLevelItem(0) != this && childCount() == 0)
-    menu->addAction(ui()->actionCloseRenderWindow);
+  cloud_->clear();
+
+  return;
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////
+void
+pcl::modeler::ICPRegistrationWorker::setupParameters()
+{
+  return;
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////
+void
+pcl::modeler::ICPRegistrationWorker::processImpl(CloudMeshItem* cloud_mesh_item)
+{
+  if (cloud_->empty())
+  {
+    *cloud_ = *(cloud_mesh_item->getCloudMesh()->getCloud());
+    return;
+  }
+
+  pcl::IterativeClosestPoint<CloudMesh::PointT, CloudMesh::PointT> icp;
+  icp.setInputCloud(cloud_);
+  icp.setInputTarget(cloud_mesh_item->getCloudMesh()->getCloud());
+  pcl::PointCloud<CloudMesh::PointT> result;
+  icp.align(result);
+
+  result.sensor_origin_ = cloud_mesh_item->getCloudMesh()->getCloud()->sensor_origin_;
+  result.sensor_orientation_ = cloud_mesh_item->getCloudMesh()->getCloud()->sensor_orientation_;
+
+  *cloud_ = result;
+
+  return;
 }
