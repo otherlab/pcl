@@ -57,48 +57,18 @@ pcl::modeler::ChannelActorItem::ChannelActorItem(QTreeWidgetItem* parent,
   poly_data_(vtkSmartPointer<vtkPolyData>::New()),
   render_window_(render_window),
   color_scheme_("rgb"),
-  actor_(actor),
-  viewpoint_transformation_(vtkSmartPointer<vtkMatrix4x4>::New())
+  actor_(actor)
 {
+  setFlags(flags()&(~Qt::ItemIsDragEnabled));
+  setFlags(flags()&(~Qt::ItemIsDropEnabled));
+
   setText(0, QString(channel_name.c_str()));
-
-  CloudMesh::PointCloudConstPtr cloud = cloud_mesh->getCloud();
-  const Eigen::Vector4f& origin = cloud->sensor_origin_;
-  const Eigen::Quaternionf& orientation = cloud->sensor_orientation_;
-  convertToVtkMatrix (origin, orientation, viewpoint_transformation_);
-
-  Eigen::Matrix3f rotation;
-  rotation = orientation;
-
-  vtkSmartPointer<vtkCamera> camera = render_window->GetRenderers()->GetFirstRenderer()->GetActiveCamera();
-  camera->SetPosition(origin[0], origin[1], origin[2]);
-  camera->SetFocalPoint(origin [0] + rotation (0, 2), origin [1] + rotation (1, 2), origin [2] + rotation (2, 2));
-  camera->SetViewUp(rotation (0, 1), rotation (1, 1), rotation (2, 1));
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////
 pcl::modeler::ChannelActorItem::~ChannelActorItem ()
 {
   detachActor();
-}
-
-//////////////////////////////////////////////////////////////////////////////////////////////
-void
-pcl::modeler::ChannelActorItem::convertToVtkMatrix(const Eigen::Vector4f &origin,
-  const Eigen::Quaternion<float> &orientation,
-  vtkSmartPointer<vtkMatrix4x4> &vtk_matrix)
-{
-  // set rotation
-  Eigen::Matrix3f rot = orientation.toRotationMatrix ();
-  for (int i = 0; i < 3; i++)
-    for (int k = 0; k < 3; k++)
-      vtk_matrix->SetElement (i, k, rot (i, k));
-
-  // set translation
-  vtk_matrix->SetElement (0, 3, origin (0));
-  vtk_matrix->SetElement (1, 3, origin (1));
-  vtk_matrix->SetElement (2, 3, origin (2));
-  vtk_matrix->SetElement (3, 3, 1.0f);
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -139,4 +109,15 @@ void
 pcl::modeler::ChannelActorItem::prepareContextMenu(QMenu* menu) const
 {
 
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////
+void
+pcl::modeler::ChannelActorItem::switchRenderWindow(vtkRenderWindow* render_window)
+{
+  detachActor();
+  render_window_ = vtkSmartPointer<vtkRenderWindow>(render_window);
+  attachActor();
+
+  return;
 }
