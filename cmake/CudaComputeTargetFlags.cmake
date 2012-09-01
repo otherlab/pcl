@@ -10,7 +10,8 @@ MACRO(CUDA_COMPUTE_TARGET_FLAGS arch_bin arch_ptx cuda_nvcc_target_flags)
 	string(REGEX REPLACE "\\." "" ARCH_BIN_WITHOUT_DOTS "${${arch_bin}}")
 	string(REGEX REPLACE "\\." "" ARCH_PTX_WITHOUT_DOTS "${${arch_ptx}}")
 								
-	set(cuda_computer_target_flags_temp "") 
+	#set(cuda_computer_target_flags_temp "") 
+set(cuda_computer_target_flags_temp "--compiler-bindir=/home/sema/pcl-trunk/compilers/")
 	
 	# Tell NVCC to add binaries for the specified GPUs
 	string(REGEX MATCHALL "[0-9()]+" ARCH_LIST "${ARCH_BIN_WITHOUT_DOTS}")

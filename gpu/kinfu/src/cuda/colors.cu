@@ -267,3 +267,158 @@ pcl::device::exctractColors (const PtrStep<uchar4>& color_volume, const float3& 
   cudaSafeCall ( cudaGetLastError () );
   cudaSafeCall (cudaDeviceSynchronize ());
 };
+
+///////////////////////////////////////////////////////
+//SEMA
+//average colors from rgb images to assign 3d model color values
+//////////////////////////////////////////////////////
+
+
+namespace pcl
+{
+  namespace device
+  {
+
+      __global__ void
+      setBlackKernel (uchar4* color_cloud, int size)
+      {
+          int x = threadIdx.x + blockIdx.x * blockDim.x;
+          if(x > size)
+              return;
+          color_cloud[x] = make_uchar4(0,0,0,0);
+      }
+      __global__ void
+      image23 (PtrStepSz<uchar3> rgb, PtrSz<PointType> cloud, uchar4* color_cloud, PtrStep<float> vmap, PtrStep<float> nmap,
+               const float tranc_dist, const Mat33 Rcurr_inv, const float3 tcurr, const Intr intr, const float3 cell_size)
+      {
+          int x = threadIdx.x + blockIdx.x * blockDim.x;
+
+          if(x > cloud.size)
+              return;
+
+
+          float3 v_g = *(float3*)(cloud.data + x);
+
+          float3 v = Rcurr_inv * (v_g - tcurr);
+
+          if (v.z <= 0)
+              return;
+
+          int2 coo;                   //project to current cam
+          coo.x = __float2int_rn (v.x * intr.fx / v.z + intr.cx);
+          coo.y = __float2int_rn (v.y * intr.fy / v.z + intr.cy);
+
+          if (coo.x >= 0 && coo.y >= 0 && coo.x < rgb.cols && coo.y < rgb.rows)
+          {
+//              float N_Z_THRESHOLD = 0.2;
+
+              float3 p;
+              p.x = vmap.ptr (coo.y)[coo.x];
+
+              if (isnan (p.x))
+                  return;
+
+              float n_z = nmap.ptr (coo.y + rgb.rows * 2)[coo.x];
+
+              p.y = vmap.ptr (coo.y + rgb.rows    )[coo.x];
+              p.z = vmap.ptr (coo.y + rgb.rows * 2)[coo.x];
+
+              float dist = norm (v)  - norm(p);
+
+              if( dist > -0.002 && dist < 0.008)
+              {
+                  uchar4 rgbw = color_cloud[x];
+                  uchar3 pix = rgb.ptr (coo.y)[coo.x];
+
+//                  if(rgbw.w > 235)
+//                      return;
+
+//                  float wn = 20.f*n_z;
+
+//                  if(rgbw.w < wn)
+//                  {
+//                      rgbw = make_uchar4( min (255, max (0, pix.z) ),
+//                                          min (255, max (0, pix.y) ),
+//                                          min (255, max (0, pix.x) ),
+//                                          min (255, __float2int_rn (wn) ));//bgra
+
+//                  }
+//                  else if(wn >= N_Z_THRESHOLD) //blend
+//                  {
+//                      rgbw = make_uchar4( min (255, max (0, __float2int_rn ((float)(rgbw.z*rgbw.w + wn*pix.z)/((float)rgbw.w+wn)) )),
+//                                          min (255, max (0, __float2int_rn ((float)(rgbw.y*rgbw.w + wn*pix.y)/((float)rgbw.w+wn)))),
+//                                          min (255, max (0, __float2int_rn ((float)(rgbw.x*rgbw.w + wn*pix.x)/((float)rgbw.w+wn)))),
+//                                          min (255, __float2int_rn (wn + rgbw.w) ) );//bgra
+
+////                      rgbw = make_uchar4( min (255, max (0, __float2int_rn ((float)(rgbw.z*rgbw.w + pix.z)/((float)rgbw.w+1.)))) ,
+////                                          min (255, max (0, __float2int_rn ((float)(rgbw.y*rgbw.w + pix.y)/((float)rgbw.w+1.)))) ,
+////                                          min (255, max (0, __float2int_rn ((float)(rgbw.x*rgbw.w + pix.x)/((float)rgbw.w+1.)))) ,
+////                                          min (255, rgbw.w+1) );//bgra
+//                  }
+//                  else
+//                  {
+//                      rgbw = make_uchar4( min (255, max (0, pix.z) ),
+//                                          min (255, max (0, pix.y) ),
+//                                          min (255, max (0, pix.x) ),
+//                                          min (255, __float2int_rn (wn) ));//bgra
+//                  }
+
+                  //Average
+//                  if(n_z > N_Z_THRESHOLD)
+                      rgbw = make_uchar4( min (255, max (0, __float2int_rn ((float)(rgbw.z*rgbw.w + pix.z)/((float)rgbw.w+1.)))) ,
+                                          min (255, max (0, __float2int_rn ((float)(rgbw.y*rgbw.w + pix.y)/((float)rgbw.w+1.)))) ,
+                                          min (255, max (0, __float2int_rn ((float)(rgbw.x*rgbw.w + pix.x)/((float)rgbw.w+1.)))) ,
+                                          min (255, rgbw.w+1) );//bgra
+
+                  color_cloud[x] = rgbw;
+              }
+
+          }
+      }      // __global__
+    }
+}
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void
+pcl::device::integrateColorFromRGB (PtrStepSz<uchar3> rgb, const Intr& intr,
+                                  const float3& volume_size, const Mat33& Rcurr_inv, const float3& tcurr,
+                                  float tranc_dist,
+                                  const MapArr& vmap, const MapArr& nmap, PtrSz<PointType> cloud, uchar4* color_cloud, size_t sz)
+{
+//  depthScaled.create (rgb.rows, rgb.cols);
+
+//  dim3 block_scale (32, 8);
+//  dim3 grid_scale (divUp (rgb.cols, block_scale.x), divUp (rgb.rows, block_scale.y));
+
+//  //scales depth along ray and converts mm -> meters.
+//  scaleDepth<<<grid_scale, block_scale>>>(depth, depthScaled, intr);
+//  cudaSafeCall ( cudaGetLastError () );
+
+    const int block = 256;
+    float3 cell_size = make_float3 (volume_size.x / VOLUME_X, volume_size.y / VOLUME_Y, volume_size.z / VOLUME_Z);
+    image23<<<divUp (sz, block), block>>>(rgb, cloud, color_cloud, vmap, nmap, tranc_dist, Rcurr_inv, tcurr, intr, cell_size);
+    cudaSafeCall ( cudaGetLastError () );
+    cudaSafeCall (cudaDeviceSynchronize ());
+
+
+//  float3 cell_size;
+//  cell_size.x = volume_size.x / VOLUME_X;
+//  cell_size.y = volume_size.y / VOLUME_Y;
+//  cell_size.z = volume_size.z / VOLUME_Z;
+
+//  dim3 block (16, 16);
+////  dim3 grid (divUp (VOLUME_X, block.x), divUp (VOLUME_Y, block.y));
+
+//  image23<<<n_blocks, block>>>(rgb, cloud, color_cloud, volume, tranc_dist, Rcurr_inv, tcurr, intr, cell_size);
+
+//  cudaSafeCall ( cudaGetLastError () );
+//  cudaSafeCall (cudaDeviceSynchronize ());
+};
+void
+pcl::device::setBlack ( uchar4* color_cloud, size_t sz)
+{
+    const int block = 256;
+    setBlackKernel<<<divUp (sz, block), block>>>(color_cloud, sz);
+    cudaSafeCall ( cudaGetLastError () );
+    cudaSafeCall (cudaDeviceSynchronize ());
+
+};

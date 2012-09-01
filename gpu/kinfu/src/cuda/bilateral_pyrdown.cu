@@ -37,6 +37,8 @@
 
 #include "device.hpp"
 
+const float scale_factor = 64; //sema 64
+
 namespace pcl
 {
   namespace device
@@ -44,19 +46,21 @@ namespace pcl
     const float sigma_color = 30;     //in mm
     const float sigma_space = 4.5;     // in pixels
 
+
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     __global__ void
     bilateralKernel (const PtrStepSz<ushort> src, 
                      PtrStep<ushort> dst, 
-                     float sigma_space2_inv_half, float sigma_color2_inv_half)
+                     float sigma_space2_inv_half, float sigma_color2_inv_half, ushort trunc_dist_mm, float scaleFactor)
     {
+        trunc_dist_mm = 1000;
       int x = threadIdx.x + blockIdx.x * blockDim.x;
       int y = threadIdx.y + blockIdx.y * blockDim.y;
 
-      if (x >= src.cols || y >= src.rows)
+      if (x >= src.cols || y >= src.rows )
         return;
 
-      const int R = 6;       //static_cast<int>(sigma_space * 1.5);
+      const int R = 4;       //static_cast<int>(sigma_space * 1.5);
       const int D = R * 2 + 1;
 
       int value = src.ptr (y)[x];
@@ -72,7 +76,6 @@ namespace pcl
         for (int cx = max (x - D / 2, 0); cx < tx; ++cx)
         {
           int tmp = src.ptr (cy)[cx];
-
           float space2 = (x - cx) * (x - cx) + (y - cy) * (y - cy);
           float color2 = (value - tmp) * (value - tmp);
 
@@ -82,9 +85,56 @@ namespace pcl
           sum2 += weight;
         }
       }
+      int res = __float2int_rn (scale_factor*sum1 / sum2);
+//      printf("%d %f\n", numeric_limits<ushort>::max (), sum1 / sum2);
+      if(sum1 / sum2>trunc_dist_mm)
+          res = 0;
+
+      dst.ptr (y)[x] = max (0, min (res, numeric_limits<ushort>::max ()));
+    }
+
+    ///sema
+    __global__ void
+    blurKernel (const PtrStepSz<ushort> src,
+                     PtrStep<ushort> dst,
+                     float sigma_space2_inv_half)
+    {
+      int x = threadIdx.x + blockIdx.x * blockDim.x;
+      int y = threadIdx.y + blockIdx.y * blockDim.y;
+
+      if (x >= src.cols || y >= src.rows)
+        return;
+
+      const int R = 3;       //static_cast<int>(sigma_space * 1.5);
+      const int D = R * 2 + 1;
+
+      int tx = min (x - D / 2 + D, src.cols - 1);
+      int ty = min (y - D / 2 + D, src.rows - 1);
+
+      float sum1 = 0;
+      float sum2 = 0;
+
+      for (int cy = max (y - D / 2, 0); cy < ty; ++cy)
+      {
+        for (int cx = max (x - D / 2, 0); cx < tx; ++cx)
+        {
+          int tmp = src.ptr (cy)[cx];
+
+          float space2 = (x - cx) * (x - cx) + (y - cy) * (y - cy);
+
+          float weight = __expf (-(space2 * sigma_space2_inv_half));
+
+          sum1 += tmp * weight;
+          sum2 += weight;
+        }
+      }
 
       int res = __float2int_rn (sum1 / sum2);
-      dst.ptr (y)[x] = max (0, min (res, numeric_limits<short>::max ()));
+//      if(res<200 || res>1000) dst.ptr (y)[x]=0;
+////      else if(res>2000) res=0;
+//      else
+//        dst.ptr (y)[x] = src.ptr (y)[x];
+      dst.ptr (y)[x] = max (0, min (res, numeric_limits<ushort>::max ()));
     }
 
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -122,27 +172,122 @@ namespace pcl
     }
 
 	__global__ void
-    truncateDepthKernel(PtrStepSz<ushort> depth, ushort max_distance_mm)
+    truncateDepthKernel(PtrStepSz<ushort> depth, ushort max_distance_mm, float scaleFactor)
 	{
 		int x = blockIdx.x * blockDim.x + threadIdx.x;
 		int y = blockIdx.y * blockDim.y + threadIdx.y;
 
-		if (x < depth.cols && y < depth.rows)		
-			if(depth.ptr(y)[x] > max_distance_mm)
-				depth.ptr(y)[x] = 0;
+        if (x < depth.cols && y < depth.rows)
+        {
+            depth.ptr(y)[x] = __float2int_rn((depth.ptr(y)[x]+0.5f)/scale_factor);
+            if(depth.ptr(y)[x] > max_distance_mm )
+                depth.ptr(y)[x] = 0;
+        }
 	}
+    __global__ void
+    scaleRawDepthKernel(const PtrStepSz<ushort> src, PtrStepSz<ushort> tgt, ushort max_distance_mm, float scaleFactor)
+    {
+        int x = blockIdx.x * blockDim.x + threadIdx.x;
+        int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+        if (x < src.cols && y < src.rows)
+        {
+            int p = src.ptr(y)[x];
+            if(p > max_distance_mm )
+                tgt.ptr(y)[x] = 0;
+            else
+                tgt.ptr(y)[x] = __float2int_rn(p*scaleFactor);
+
+        }
+    }
+    __global__ void
+    erodeKernel(PtrStepSz<ushort> src, PtrStepSz<ushort> dest)
+    {
+        int x = blockIdx.x * blockDim.x + threadIdx.x;
+        int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+        if (x < src.cols && y < src.rows)
+        {
+            const int D = 7;
+
+            int tx = min (x - D / 2 + D, src.cols - 1);
+            int ty = min (y - D / 2 + D, src.rows - 1);
+
+            int count = 0;
+            int tot_c = 0;
+            for (int cy = max (y - D / 2, 0); cy < ty; ++cy)
+            {
+              for (int cx = max (x - D / 2, 0); cx < tx; ++cx)
+              {
+                  tot_c++;
+                if(src.ptr (cy)[cx] > 0)
+                    count++;
+              }
+            }
+            if(count < tot_c*0.5)
+                dest.ptr(y)[x] = 0;
+        }
+    }
+    __global__ void
+    diluteKernel(PtrStepSz<ushort> src, PtrStepSz<ushort> dest)
+    {
+        int x = blockIdx.x * blockDim.x + threadIdx.x;
+        int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+        if (x < src.cols && y < src.rows)
+        {
+            const int D = 3;
+
+            int tx = min (x - D / 2 + D, src.cols - 1);
+            int ty = min (y - D / 2 + D, src.rows - 1);
+
+            int count = 0;
+            int tot_c = 0;
+            int avg = 0;
+            for (int cy = max (y - D / 2, 0); cy < ty; ++cy)
+            {
+              for (int cx = max (x - D / 2, 0); cx < tx; ++cx)
+              {
+                  tot_c++;
+                if(src.ptr (cy)[cx] > 0) {
+                    avg += src.ptr (cy)[cx];
+                    count++;
+                }
+              }
+            }
+            if(count < 3)
+                dest.ptr(y)[x] = 0;
+            else
+                dest.ptr(y)[x] = 1;
+        }
+    }
+
+
   }
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void
-pcl::device::bilateralFilter (const DepthMap& src, DepthMap& dst)
+pcl::device::bilateralFilter (const DepthMap& src, DepthMap& dst, float trunc_dist, float scale_factor)
 {
   dim3 block (32, 8);
   dim3 grid (divUp (src.cols (), block.x), divUp (src.rows (), block.y));
 
   cudaFuncSetCacheConfig (bilateralKernel, cudaFuncCachePreferL1);
-  bilateralKernel<<<grid, block>>>(src, dst, 0.5f / (sigma_space * sigma_space), 0.5f / (sigma_color * sigma_color));
+  bilateralKernel<<<grid, block>>>(src, dst, 0.5f / (sigma_space * sigma_space), 0.5f / (sigma_color * sigma_color),static_cast<ushort>(0.8 * 1000.f), scale_factor);
+
+  cudaSafeCall ( cudaGetLastError () );
+};
+
+/////////////sema
+void
+pcl::device::blurFilter (const DepthMap& src, DepthMap& dst)
+{
+  dim3 block (32, 8);
+  dim3 grid (divUp (src.cols (), block.x), divUp (src.rows (), block.y));
+
+  cudaFuncSetCacheConfig (blurKernel, cudaFuncCachePreferL1);
+  blurKernel<<<grid, block>>>(src, dst, 0.5f / (16));
 
   cudaSafeCall ( cudaGetLastError () );
 };
@@ -162,12 +307,41 @@ pcl::device::pyrDown (const DepthMap& src, DepthMap& dst)
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void 
-pcl::device::truncateDepth(DepthMap& depth, float max_distance)
+pcl::device::truncateDepth(DepthMap& depth, float max_distance, float scale_factor)
 {
   dim3 block (32, 8);
   dim3 grid (divUp (depth.cols (), block.x), divUp (depth.rows (), block.y));
 
-  truncateDepthKernel<<<grid, block>>>(depth, static_cast<ushort>(max_distance * 1000.f));
+  truncateDepthKernel<<<grid, block>>>(depth, static_cast<ushort>(max_distance * 1000.f), scale_factor);
 
   cudaSafeCall ( cudaGetLastError () );
 }
+
+
+//sema
+void
+pcl::device::scaleRawDepth(const DepthMap&depth_raw1, DepthMap& depth_raw_save, float max_distance, float scale_factor)
+{
+    dim3 block (32, 8);
+    dim3 grid (divUp (depth_raw1.cols (), block.x), divUp (depth_raw1.rows (), block.y));
+
+    scaleRawDepthKernel<<<grid, block>>>(depth_raw1, depth_raw_save, static_cast<ushort>(max_distance * 1000.f), scale_factor);
+
+    cudaSafeCall ( cudaGetLastError () );
+}
+
+void
+pcl::device::erode(DepthMap& depth_src, DepthMap& depth_dest)
+{
+    dim3 block (32, 8);
+    dim3 grid (divUp (depth_src.cols (), block.x), divUp (depth_src.rows (), block.y));
+
+    DepthMap& depth_temp(depth_src);
+//    diluteKernel<<<grid, block>>>(depth_src, depth_temp);
+//    cudaSafeCall ( cudaGetLastError () );
+
+    erodeKernel<<<grid, block>>>(depth_temp, depth_dest);
+    cudaSafeCall ( cudaGetLastError () );
+}
+
+

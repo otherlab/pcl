@@ -44,7 +44,8 @@
 #include <pcl/point_cloud.h>
 #include <Eigen/Core>
 #include <vector>
-
+//SEMA
+#include <pcl/ModelCoefficients.h>
 namespace pcl
 {
   namespace gpu
@@ -145,6 +146,18 @@ namespace pcl
         */
       void
       downloadTsdfAndWeighs(std::vector<float>& tsdf, std::vector<short>& weights) const;
+
+      //SEMA
+      void
+      cleanTsdfByROIandPlane (pcl::ModelCoefficients::Ptr box_boundaries,
+                                                            pcl::ModelCoefficients::Ptr coeffs) ;
+      //SEMA
+      void
+      reduceTsdfByROI (pcl::ModelCoefficients::Ptr box_boundaries);
+
+      //sema
+      void
+      postProcess ();
 
     private:
       /** \brief tsdf volume size in meters */

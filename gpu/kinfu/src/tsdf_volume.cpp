@@ -169,6 +169,10 @@ pcl::gpu::TsdfVolume::fetchCloudHost (PointCloud<PointType>& cloud, bool connect
           continue;
 
         Vector3f V = ((Array3f(x, y, z) + 0.5f) * cell_size).matrix ();
+//        std::cout<<x<<" "<<y<<" "<<z<<std::endl;
+//        std::cout<<V[0]<<std::endl;
+//        std::cout<<V[1]<<std::endl;
+//        std::cout<<V[2]<<std::endl;
 
         if (connected26)
         {
@@ -216,6 +220,9 @@ pcl::gpu::TsdfVolume::fetchCloudHost (PointCloud<PointType>& cloud, bool connect
                 xyz.x = point (0);
                 xyz.y = point (1);
                 xyz.z = point (2);
+//                std::cout<<xyz.x<<std::endl;
+//                std::cout<<xyz.y<<std::endl;
+//                std::cout<<xyz.z<<std::endl<<std::endl;
 
                 cloud.points.push_back (xyz);
               }
@@ -249,6 +256,10 @@ pcl::gpu::TsdfVolume::fetchCloudHost (PointCloud<PointType>& cloud, bool connect
               xyz.y = point (1);
               xyz.z = point (2);
 
+//              std::cout<<xyz.x<<std::endl;
+//              std::cout<<xyz.y<<std::endl;
+//              std::cout<<xyz.z<<std::endl<<std::endl;
+
               cloud.points.push_back (xyz);
             }
           }
@@ -271,6 +282,13 @@ pcl::gpu::TsdfVolume::fetchCloud (DeviceArray<PointType>& cloud_buffer) const
   float3 device_volume_size = device_cast<const float3> (size_);
   size_t size = device::extractCloud (volume_, device_volume_size, cloud_buffer);
   return (DeviceArray<PointType> (cloud_buffer.ptr (), size));
+}
+
+//sema
+void
+pcl::gpu::TsdfVolume::postProcess ()
+{
+   device::postProcessTsdf (volume_);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -326,4 +344,184 @@ pcl::gpu::TsdfVolume::downloadTsdfAndWeighs (std::vector<float>& tsdf, std::vect
     tsdf[i] = (float)(elem.x)/device::DIVISOR;    
     weights[i] = (short)(elem.y);    
   }
+}
+
+//SEMA
+void
+pcl::gpu::TsdfVolume::reduceTsdfByROI (pcl::ModelCoefficients::Ptr box_boundaries)
+{
+
+  device::reduceVolumeWeights(volume_, box_boundaries);
+  return;
+}
+void
+pcl::gpu::TsdfVolume::cleanTsdfByROIandPlane (pcl::ModelCoefficients::Ptr box_boundaries,
+                                                      pcl::ModelCoefficients::Ptr plane_coeffs)
+{
+
+
+//    device::initVolume(volume_);
+
+  device::cutVolume(volume_, box_boundaries, plane_coeffs);
+  return;
+
+
+//  int volume_x = resolution_(0);
+//  int volume_y = resolution_(1);
+//  int volume_z = resolution_(2);
+
+//  DeviceArray2D<int> volume_2(volume_);
+//  std::cout<<"b "<<volume_temp.cols()<<std::endl;
+//  std::cout<<"b "<<volume_temp.rows()<<std::endl;
+
+//  std::cout<<"b "<<volume_.cols()<<std::endl;
+//  device::initVolume(volume_2);
+//  std::cout<<"a"<<std::endl;
+//    int cols;
+//    std::vector<int> volume_host;
+//    volume_.download (volume_host, cols);
+
+//    std::vector<int> volume_temp;
+//    device::initVolume(volume_2);
+//    volume_2.download (volume_temp, cols);
+
+//#define FETCH1(x, y, z) volume_temp[(x) + (y) * volume_x + (z) * volume_y * volume_x]
+//#define FETCH2(x, y, z) volume_host[(x) + (y) * volume_x + (z) * volume_y * volume_x]
+
+//  Array3f cell_size = getVoxelSize();
+//std::cout<<"b "<<cloud_roi.size()<<std::endl;
+//  for(int i=0; i<cloud_roi.size(); i++)
+//  {
+//      pcl::PointXYZ point = cloud_roi.at(i);
+//      int x = round(point.x/cell_size[0]);
+//      int y = round(point.y/cell_size[1]);
+//      int z = round(point.z/cell_size[2]);
+
+
+//      int tmp1 = FETCH1 (x, y, z);
+//      int tmp2 = FETCH2 (x, y, z);
+//volume_host[(x) + (y) * volume_x + (z) * volume_y * volume_x] = -100;
+
+// reinterpret_cast<short2*>(&tmp2)->y = 0;
+//       reinterpret_cast<short2*>(&tmp2)->x = -100;
+//      reinterpret_cast<short2*>(&tmp1)->y = 0;//reinterpret_cast<short2*>(&tmp2)->y;
+//      reinterpret_cast<short2*>(&tmp1)->x = 0;//reinterpret_cast<short2*>(&tmp2)->x;
+//  }
+//  volume_.upload(volume_host, cols);
+//  int cols;
+//  std::vector<int> volume_host;
+//  volume_.download (volume_host, cols);
+
+//  cloud.points.clear ();
+//  cloud.points.reserve (10000);
+
+//  const int DIVISOR = device::DIVISOR; // SHRT_MAX;
+
+
+
+
+//  for (int x = 1; x < volume_x-1; ++x)
+//  {
+//    for (int y = 1; y < volume_y-1; ++y)
+//    {
+//      for (int z = 0; z < volume_z-1; ++z)
+//      {
+//        int tmp = FETCH (x, y, z);
+//        int W = reinterpret_cast<short2*>(&tmp)->y;
+//        int F = reinterpret_cast<short2*>(&tmp)->x;
+
+//        if (W == 0 || F == DIVISOR)
+//          continue;
+
+//        Vector3f V = ((Array3f(x, y, z) + 0.5f) * cell_size).matrix ();
+
+//        if (connected26)
+//        {
+//          int dz = 1;
+//          for (int dy = -1; dy < 2; ++dy)
+//            for (int dx = -1; dx < 2; ++dx)
+//            {
+//              int tmp = FETCH (x+dx, y+dy, z+dz);
+
+//              int Wn = reinterpret_cast<short2*>(&tmp)->y;
+//              int Fn = reinterpret_cast<short2*>(&tmp)->x;
+//              if (Wn == 0 || Fn == DIVISOR)
+//                continue;
+
+//              if ((F > 0 && Fn < 0) || (F < 0 && Fn > 0))
+//              {
+//                Vector3f Vn = ((Array3f (x+dx, y+dy, z+dz) + 0.5f) * cell_size).matrix ();
+//                Vector3f point = (V * abs (Fn) + Vn * abs (F)) / (abs (F) + abs (Fn));
+
+//                pcl::PointXYZ xyz;
+//                xyz.x = point (0);
+//                xyz.y = point (1);
+//                xyz.z = point (2);
+
+//                cloud.points.push_back (xyz);
+//              }
+//            }
+//          dz = 0;
+//          for (int dy = 0; dy < 2; ++dy)
+//            for (int dx = -1; dx < dy * 2; ++dx)
+//            {
+//              int tmp = FETCH (x+dx, y+dy, z+dz);
+
+//              int Wn = reinterpret_cast<short2*>(&tmp)->y;
+//              int Fn = reinterpret_cast<short2*>(&tmp)->x;
+//              if (Wn == 0 || Fn == DIVISOR)
+//                continue;
+
+//              if ((F > 0 && Fn < 0) || (F < 0 && Fn > 0))
+//              {
+//                Vector3f Vn = ((Array3f (x+dx, y+dy, z+dz) + 0.5f) * cell_size).matrix ();
+//                Vector3f point = (V * abs(Fn) + Vn * abs(F))/(abs(F) + abs (Fn));
+
+//                pcl::PointXYZ xyz;
+//                xyz.x = point (0);
+//                xyz.y = point (1);
+//                xyz.z = point (2);
+
+//                cloud.points.push_back (xyz);
+//              }
+//            }
+//        }
+//        else /* if (connected26) */
+//        {
+//          for (int i = 0; i < 3; ++i)
+//          {
+//            int ds[] = {0, 0, 0};
+//            ds[i] = 1;
+
+//            int dx = ds[0];
+//            int dy = ds[1];
+//            int dz = ds[2];
+
+//            int tmp = FETCH (x+dx, y+dy, z+dz);
+
+//            int Wn = reinterpret_cast<short2*>(&tmp)->y;
+//            int Fn = reinterpret_cast<short2*>(&tmp)->x;
+//            if (Wn == 0 || Fn == DIVISOR)
+//              continue;
+
+//            if ((F > 0 && Fn < 0) || (F < 0 && Fn > 0))
+//            {
+//              Vector3f Vn = ((Array3f (x+dx, y+dy, z+dz) + 0.5f) * cell_size).matrix ();
+//              Vector3f point = (V * abs (Fn) + Vn * abs (F)) / (abs (F) + abs (Fn));
+
+//              pcl::PointXYZ xyz;
+//              xyz.x = point (0);
+//              xyz.y = point (1);
+//              xyz.z = point (2);
+
+//              cloud.points.push_back (xyz);
+//            }
+//          }
+//        } /* if (connected26) */
+//      }
+//    }
+//  }
+//#undef FETCH
+//  cloud.width  = (int)cloud.points.size ();
+//  cloud.height = 1;
 }

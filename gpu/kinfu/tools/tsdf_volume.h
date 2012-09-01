@@ -31,7 +31,7 @@
  *  ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  *  POSSIBILITY OF SUCH DAMAGE.
  *
- *  $Id$
+ *  $Id: $
  */
 
 
@@ -220,6 +220,13 @@ namespace pcl
 
     ////////////////////////////////////////////////////////////////////////////////////////
     // Functionality
+
+    //SEMA
+    //compute the plane in the volume
+    void
+    computePlane();
+
+
 
     /** \brief Converts volume to cloud of TSDF values*/
     void

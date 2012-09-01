@@ -72,6 +72,34 @@
 #include <pcl/visualization/mouse_event.h>
 #include <pcl/visualization/point_picking_event.h>
 
+//sema
+#include <vtkVersion.h>
+#include <vtkSmartPointer.h>
+#include <vtkPointPicker.h>
+#include <vtkSphereSource.h>
+#include <vtkGlyph3D.h>
+#include <vtkPointData.h>
+#include <vtkIdTypeArray.h>
+#include <vtkDataSetSurfaceFilter.h>
+#include <vtkRendererCollection.h>
+#include <vtkProperty.h>
+#include <vtkPlanes.h>
+#include <vtkObjectFactory.h>
+#include <vtkPolyDataMapper.h>
+#include <vtkActor.h>
+#include <vtkRenderWindow.h>
+#include <vtkRenderer.h>
+#include <vtkRenderWindowInteractor.h>
+#include <vtkPolyData.h>
+#include <vtkPointSource.h>
+#include <vtkInteractorStyleTrackballActor.h>
+#include <vtkAreaPicker.h>
+#include <vtkExtractGeometry.h>
+#include <vtkDataSetMapper.h>
+#include <vtkUnstructuredGrid.h>
+#include <vtkVertexGlyphFilter.h>
+#include <vtkIdFilter.h>
+
 namespace pcl
 {
   namespace visualization
@@ -184,6 +212,20 @@ namespace pcl
           modifier_ = modifier;
         }
 
+        //sema
+        vtkPolyData* Data;
+          vtkPolyData* GlyphData;
+
+          vtkSmartPointer<vtkPolyDataMapper> MoveMapper;
+          vtkSmartPointer<vtkActor> MoveActor;
+          vtkSmartPointer<vtkPolyData> MovePolyData;
+          vtkSmartPointer<vtkVertexGlyphFilter> MoveGlyphFilter;
+
+          vtkSmartPointer<vtkPointPicker> PointPicker;
+
+          bool Move;
+          vtkIdType SelectedPoint;
+
        protected:
         /** \brief Set to true after initialization is complete. */
         bool init_;
@@ -275,6 +317,8 @@ namespace pcl
         InteractorKeyboardModifier modifier_;
 
         friend class PointPickingCallback;
+
+
     };
 
     /** \brief PCL histogram visualizer interactory style class.

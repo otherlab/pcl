@@ -12,6 +12,14 @@ if(NOT CUDA_FOUND)
     set(REASON "CUDA was not found.")
 endif(NOT CUDA_FOUND)
 
+find_package(OpenCV)
+if(NOT OpenCV_FOUND)
+    set(DEFAULT FALSE)
+    set(REASON "OpenCV was not found.")
+endif(NOT OpenCV_FOUND)
+
+FIND_PACKAGE( OpenCV REQUIRED )
+
 OPTION(BUILD_GPU "Build the GPU-related subsystems" ${DEFAULT})
 
 if(BUILD_GPU)

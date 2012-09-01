@@ -228,6 +228,11 @@ namespace pcl
     PCL_EXPORTS vtkSmartPointer<vtkDataSet> 
     createCube (const Eigen::Vector3f &translation, const Eigen::Quaternionf &rotation,
                 double width, double height, double depth);
+
+    PCL_EXPORTS vtkSmartPointer<vtkDataSet> 
+    createCube (double x_min, double x_max,
+	                        double y_min, double y_max,
+	                        double z_min, double z_max);
     
     /** \brief Allocate a new unstructured grid smartpointer. For internal use only.
       * \param[out] polydata the resultant unstructured grid. 

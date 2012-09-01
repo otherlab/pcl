@@ -31,7 +31,7 @@
  *  ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  *  POSSIBILITY OF SUCH DAMAGE.
  *
- *  $Id$
+ *  $Id: tsdf_volume.hpp 3847 2012-01-09 06:20:21Z rusu $
  */
 
 #ifndef TSDF_VOLUME_HPP_
@@ -40,6 +40,24 @@
 #include "tsdf_volume.h"
 
 #include <fstream>
+
+//SEMA
+template <typename VoxelT, typename WeightT> void
+pcl::TSDFVolume<VoxelT, WeightT>::computePlane ()
+{
+//  #pragma omp parallel for
+//  for (size_t i = 0; i < volume_->size(); ++i)
+//  {
+//    WeightT &w = weights_->at(i);
+//    if (w > 0.0)
+//    {
+//      volume_->at(i) /= w;
+//      w = 1.0;
+//    }
+//  }
+}
+
+
 
 
 template <typename VoxelT, typename WeightT> bool
@@ -188,6 +206,8 @@ pcl::TSDFVolume<VoxelT, WeightT>::convertToTsdfCloud (pcl::PointCloud<pcl::Point
   // cloud->width = cloud_size;
   // cloud->height = 1;
 }
+
+
 
 
 template <typename VoxelT, typename WeightT> template <typename PointT> void

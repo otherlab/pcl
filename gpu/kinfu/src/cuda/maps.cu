@@ -109,6 +109,95 @@ namespace pcl
       else
         nmap.ptr (v)[u] = numeric_limits<float>::quiet_NaN ();
     }
+
+    __global__ void
+    eliminateVMapKernel (int rows, int cols, PtrStep<float> vmap, PtrStep<float> nmap, PtrStepSz<unsigned short> depth1, PtrStepSz<unsigned short> depth2)
+    {
+      int u = threadIdx.x + blockIdx.x * blockDim.x;
+      int v = threadIdx.y + blockIdx.y * blockDim.y;
+
+      if (u < cols && v < rows)
+      {
+
+//          float x = nmap.ptr (v       )[u];
+//          float y = nmap.ptr (v + rows)[u];
+          float z = nmap.ptr (v + 2 * rows)[u];
+
+          if(fabs(z)<0.1)
+          {
+            vmap.ptr (v)[u] = numeric_limits<float>::quiet_NaN ();
+            nmap.ptr (v)[u] = numeric_limits<float>::quiet_NaN ();
+            depth1.ptr (v)[u] = 0.;
+            depth2.ptr (v)[u] = 0.;
+          }
+
+      }
+    }
+    __global__ void
+    eliminateVMapKernel (int rows, int cols, PtrStep<float> vmap, PtrStep<float> nmap)
+    {
+      int u = threadIdx.x + blockIdx.x * blockDim.x;
+      int v = threadIdx.y + blockIdx.y * blockDim.y;
+
+      if (u < cols && v < rows)
+      {
+
+//          float x = nmap.ptr (v       )[u];
+//          float y = nmap.ptr (v + rows)[u];
+          float z = nmap.ptr (v + 2 * rows)[u];
+
+          if(fabs(z)<0.1)
+          {
+            vmap.ptr (v)[u] = numeric_limits<float>::quiet_NaN ();
+            nmap.ptr (v)[u] = numeric_limits<float>::quiet_NaN ();
+          }
+
+      }
+    }
+
+    __global__ void
+    maskRGBKernel (PtrStepSz<ushort> depth, PtrStepSz<uchar3> rgb, ushort trunct_dist)
+    {
+      int x = threadIdx.x + blockIdx.x * blockDim.x;
+      int y = threadIdx.y + blockIdx.y * blockDim.y;
+
+      if (x >= rgb.cols || y >= rgb.rows)
+        return;
+
+      if(depth.ptr ((int)round(y/2.))[(int)round(x/2.)] == 0 || depth.ptr ((int)round(y/2.))[(int)round(x/2.)] > trunct_dist
+              || x<10 || y<10 || x >= rgb.cols-10 || y >= 950)
+        rgb.ptr (y)[x] =  make_uchar3 (0 ,0, 0);
+    }
+
+
+    __global__ void
+    eliminatePointsOnGroundKernel (PtrStepSz<ushort> depth_raw, PtrStep<float> vmap,
+                                   float eps/*meters*/, float a, float b, float c, float d/*plane coefficients*/)
+    {
+
+        int u = threadIdx.x + blockIdx.x * blockDim.x;
+        int v = threadIdx.y + blockIdx.y * blockDim.y;
+
+        if (u < depth_raw.cols && v < depth_raw.rows)
+        {
+          float z = depth_raw.ptr (v)[u] / 1000.f; // load and convert: mm -> meters
+
+          if (z != 0)
+          {
+            float vx = vmap.ptr (v                     )[u];
+            float vy = vmap.ptr (v + depth_raw.rows    )[u];
+            float vz = vmap.ptr (v + depth_raw.rows * 2)[u];
+
+            float eval = a*vx + b*vy + c*vz + d;
+
+            if(fabs(eval) < eps)
+            {
+                depth_raw.ptr (v)[u] = 0;
+//                vmap.ptr (v)[u] = numeric_limits<float>::quiet_NaN ();
+            }
+          }
+        }
+    }
   }
 }
 
@@ -128,6 +217,70 @@ pcl::device::createVMap (const Intr& intr, const DepthMap& depth, MapArr& vmap)
 
   computeVmapKernel<<<grid, block>>>(depth, vmap, 1.f / fx, 1.f / fy, cx, cy);
   cudaSafeCall (cudaGetLastError ());
+}
+
+//sema
+void
+pcl::device::eliminateVMapIfNotPerpendicular ( MapArr& vmap, MapArr& nmap, DepthMap& depth1, DepthMap& depth2)
+{
+    int rows = vmap.rows () / 3;
+    int cols = vmap.cols ();
+
+    dim3 block (32, 8);
+    dim3 grid (1, 1, 1);
+    grid.x = divUp (cols, block.x);
+    grid.y = divUp (rows, block.y);
+
+    eliminateVMapKernel<<<grid, block>>>(rows, cols, vmap, nmap, depth1, depth2);
+    cudaSafeCall (cudaGetLastError ());
+
+}
+void
+pcl::device::eliminateVMapIfNotPerpendicular ( MapArr& vmap, MapArr& nmap)
+{
+    int rows = vmap.rows () / 3;
+    int cols = vmap.cols ();
+
+    dim3 block (32, 8);
+    dim3 grid (1, 1, 1);
+    grid.x = divUp (cols, block.x);
+    grid.y = divUp (rows, block.y);
+
+    eliminateVMapKernel<<<grid, block>>>(rows, cols, vmap, nmap);
+    cudaSafeCall (cudaGetLastError ());
+
+}
+
+//SEMA
+void
+pcl::device::maskRGB (DepthMap& depth, PtrStepSz<uchar3> rgb24, float trunct_dist )
+{
+    dim3 block (32, 8);
+    dim3 grid (divUp (rgb24.cols, block.x), divUp (rgb24.rows, block.y));
+
+    maskRGBKernel<<<grid, block>>>(depth, rgb24, static_cast<ushort>(trunct_dist * 1000.f));
+
+    cudaSafeCall ( cudaGetLastError () );
+}
+
+//SEMA
+void //depth_raw, depths_curr_[0], vmaps_curr_[0]
+pcl::device::eliminatePointsOnGround (DepthMap &depth_raw, MapArr &vmap, ModelCoefficients plane_coeffs)
+{
+
+    dim3 block (32, 8);
+    dim3 grid (1, 1, 1);
+    grid.x = divUp (depth_raw.cols (), block.x);
+    grid.y = divUp (depth_raw.rows (), block.y);
+
+    float eps = 0.01;
+
+    eliminatePointsOnGroundKernel<<<grid, block>>>(depth_raw, vmap, eps,
+                                                   plane_coeffs.values[0], plane_coeffs.values[1],
+                                                   plane_coeffs.values[2], plane_coeffs.values[3]);
+
+    cudaSafeCall ( cudaGetLastError () );
+
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////

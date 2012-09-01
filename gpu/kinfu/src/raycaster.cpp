@@ -44,6 +44,7 @@ using namespace pcl::gpu;
 using namespace pcl::device;
 using namespace Eigen;
 
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 pcl::gpu::RayCaster::RayCaster(int rows_arg, int cols_arg, float fx, float fy, float cx, float cy)
@@ -72,7 +73,7 @@ pcl::gpu::RayCaster::setIntrinsics(float fx, float fy, float cx, float cy)
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void 
-pcl::gpu::RayCaster::run(const TsdfVolume& volume, const Affine3f& camera_pose)
+pcl::gpu::RayCaster::run(const TsdfVolume& volume, const Affine3f& camera_pose, View &view, View &rgb)
 {  
   camera_pose_ = camera_pose;
   volume_size_ = volume.getSize();
@@ -90,7 +91,10 @@ pcl::gpu::RayCaster::run(const TsdfVolume& volume, const Affine3f& camera_pose)
   const float3& device_t   = device_cast<const float3>(t);
   
   float tranc_dist = volume.getTsdfTruncDist();  
-  device::raycast (intr, device_R, device_t, tranc_dist, device_cast<const float3>(volume_size_), volume.data(), vertex_map_, normal_map_);  
+
+  view.create(rows, cols);
+  device::raycast (intr, device_R, device_t, tranc_dist, device_cast<const float3>(volume_size_), volume.data(), vertex_map_, normal_map_, view, rgb);
+
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -108,8 +112,10 @@ pcl::gpu::RayCaster::generateSceneView(View& view, const Vector3f& light_source_
   light.number = 1;  
   light.pos[0] = device_cast<const float3>(light_source_pose);
   
-  view.create(rows, cols);
+//  view.create(rows, cols); //SEMA
+
   device::generateImage (vertex_map_, normal_map_, light, view);
+
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////

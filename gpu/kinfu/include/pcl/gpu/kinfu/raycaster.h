@@ -47,6 +47,10 @@
 #include <boost/shared_ptr.hpp>
 #include <Eigen/Geometry>
 
+//SEMA
+
+#include <pcl/gpu/kinfu/tsdf_volume.h>
+
 namespace pcl
 {
   namespace gpu
@@ -87,7 +91,7 @@ namespace pcl
         * \param[in] camera_pose camera pose
         */ 
       void 
-      run(const TsdfVolume& volume, const Eigen::Affine3f& camera_pose);
+      run(const TsdfVolume& volume, const Eigen::Affine3f& camera_pose, View& view, View &rgb);
 
       /** \brief Generates scene view using data raycasted by run method. So call it before.
         * \param[out] view output array for RGB image        
@@ -140,6 +144,7 @@ namespace pcl
 
       /** \brief Last passed volume size */
       Eigen::Vector3f volume_size_;
+
     };
     
     /** \brief Converts from map representation to organized not-dence point cloud. */

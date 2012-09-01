@@ -36,6 +36,7 @@
  */
 #include "device.hpp"
 
+
 namespace pcl
 {
   namespace device
@@ -62,7 +63,10 @@ namespace pcl
 
     struct RayCaster
     {
-      enum { CTA_SIZE_X = 32, CTA_SIZE_Y = 8 };
+      enum { CTA_SIZE_X = 32, CTA_SIZE_Y = 8,
+             //SEMA
+             MAX_WEIGHT = 1 <<7};
+
 
       Mat33 Rcurr;
       float3 tcurr;
@@ -155,7 +159,7 @@ namespace pcl
         return res;
       }
       __device__ __forceinline__ void
-      operator () () const
+      operator () ( PtrStepSz<uchar3> view, PtrStepSz<uchar3> rgb) const
       {
         int x = threadIdx.x + blockIdx.x * CTA_SIZE_X;
         int y = threadIdx.y + blockIdx.y * CTA_SIZE_Y;
@@ -183,7 +187,10 @@ namespace pcl
         const float min_dist = 0.f;         //in meters
         time_start_volume = fmax (time_start_volume, min_dist);
         if (time_start_volume >= time_exit_volume)
-          return;
+        {
+            rgb.ptr (y)[x] =  make_uchar3 (0 ,0, 0);
+            return;
+        }
 
         float time_curr = time_start_volume;
         int3 g = getVoxel (ray_start + ray_dir * time_curr);
@@ -193,9 +200,12 @@ namespace pcl
 
         float tsdf = readTsdf (g.x, g.y, g.z);
 
+        view.ptr (y)[x] = make_uchar3 (0 ,0, 0);
+
         //infinite loop guard
         const float max_time = 3 * (volume_size.x + volume_size.y + volume_size.z);
 
+//        bool occup = false;
         for (; time_curr < max_time; time_curr += time_step)
         {
           float tsdf_prev = tsdf;
@@ -207,7 +217,12 @@ namespace pcl
           tsdf = readTsdf (g.x, g.y, g.z);
 
           if (tsdf_prev < 0.f && tsdf > 0.f)
+          {
+//              uchar3 black = make_uchar3 (0 ,0, 0);
+//              rgb.ptr (y)[x] = black;
             break;
+//              continue;
+          }
 
           if (tsdf_prev > 0.f && tsdf < 0.f)           //zero crossing
           {
@@ -269,17 +284,35 @@ namespace pcl
               nmap.ptr (y       )[x] = n.x;
               nmap.ptr (y + rows)[x] = n.y;
               nmap.ptr (y + 2 * rows)[x] = n.z;
+
+              //SEMA
+              float t1;
+              int w;
+              unpack_tsdf (volume.ptr (VOLUME_Y * g.z + g.y)[g.x], t1, w);
+              w/=40;
+              uchar3 color = make_uchar3 (round(255. - (255.*w/MAX_WEIGHT)), round(255.*w/MAX_WEIGHT), 0);
+
+              view.ptr (y)[x] = color;
+//              occup = true;
+
             }
+
             break;
           }
 
+
+
         }          /* for(;;)  */
+        //sema
+//        if(!occup)
+//            rgb.ptr (y)[x] =  make_uchar3 (0 ,0, 0);
+
       }
     };
 
     __global__ void
-    rayCastKernel (const RayCaster rc) {
-      rc ();
+    rayCastKernel (const RayCaster rc,  PtrStepSz<uchar3> view,  PtrStepSz<uchar3> rgb) {
+      rc (view, rgb);
     }
   }
 }
@@ -289,7 +322,7 @@ namespace pcl
 void
 pcl::device::raycast (const Intr& intr, const Mat33& Rcurr, const float3& tcurr, 
                       float tranc_dist, const float3& volume_size,
-                      const PtrStep<short2>& volume, MapArr& vmap, MapArr& nmap)
+                      const PtrStep<short2>& volume, MapArr& vmap, MapArr& nmap, PtrStepSz<uchar3> view, PtrStepSz<uchar3> rgb)
 {
   RayCaster rc;
 
@@ -313,10 +346,13 @@ pcl::device::raycast (const Intr& intr, const Mat33& Rcurr, const float3& tcurr,
   rc.vmap = vmap;
   rc.nmap = nmap;
 
+  //SEMA
+//  rc.view = view;
+
   dim3 block (RayCaster::CTA_SIZE_X, RayCaster::CTA_SIZE_Y);
   dim3 grid (divUp (rc.cols, block.x), divUp (rc.rows, block.y));
 
-  rayCastKernel<<<grid, block>>>(rc);
+  rayCastKernel<<<grid, block>>>(rc, view, rgb);
   cudaSafeCall (cudaGetLastError ());
   //cudaSafeCall(cudaDeviceSynchronize());
 }

@@ -93,14 +93,24 @@ namespace pcl
       computeCubeIndex (int x, int y, int z, float f[8]) const
       {
         int weight;
-        readTsdf (x,     y,     z,     f[0], weight); if (weight == 0) return 0;
-        readTsdf (x + 1, y,     z,     f[1], weight); if (weight == 0) return 0;
-        readTsdf (x + 1, y + 1, z,     f[2], weight); if (weight == 0) return 0;
-        readTsdf (x,     y + 1, z,     f[3], weight); if (weight == 0) return 0;
-        readTsdf (x,     y,     z + 1, f[4], weight); if (weight == 0) return 0;
-        readTsdf (x + 1, y,     z + 1, f[5], weight); if (weight == 0) return 0;
-        readTsdf (x + 1, y + 1, z + 1, f[6], weight); if (weight == 0) return 0;
-        readTsdf (x,     y + 1, z + 1, f[7], weight); if (weight == 0) return 0;
+        //sema
+        readTsdf (x,     y,     z,     f[0], weight);// if (weight == 0) return 0;
+        readTsdf (x + 1, y,     z,     f[1], weight); //if (weight == 0) return 0;
+        readTsdf (x + 1, y + 1, z,     f[2], weight);// if (weight == 0) return 0;
+        readTsdf (x,     y + 1, z,     f[3], weight);// if (weight == 0) return 0;
+        readTsdf (x,     y,     z + 1, f[4], weight);// if (weight == 0) return 0;
+        readTsdf (x + 1, y,     z + 1, f[5], weight);// if (weight == 0) return 0;
+        readTsdf (x + 1, y + 1, z + 1, f[6], weight);// if (weight == 0) return 0;
+        readTsdf (x,     y + 1, z + 1, f[7], weight);// if (weight == 0) return 0;
+
+//        readTsdf (x,     y,     z,     f[0], weight); if (weight == 0) return 0;
+//        readTsdf (x + 1, y,     z,     f[1], weight); if (weight == 0) return 0;
+//        readTsdf (x + 1, y + 1, z,     f[2], weight); if (weight == 0) return 0;
+//        readTsdf (x,     y + 1, z,     f[3], weight); if (weight == 0) return 0;
+//        readTsdf (x,     y,     z + 1, f[4], weight); if (weight == 0) return 0;
+//        readTsdf (x + 1, y,     z + 1, f[5], weight); if (weight == 0) return 0;
+//        readTsdf (x + 1, y + 1, z + 1, f[6], weight); if (weight == 0) return 0;
+//        readTsdf (x,     y + 1, z + 1, f[7], weight); if (weight == 0) return 0;
 
         // calculate flag indicating if each vertex is inside or outside isosurface
         int cubeindex;

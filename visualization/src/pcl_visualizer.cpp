@@ -52,6 +52,34 @@
 #include <vtkPointPicker.h>
 #include <boost/unordered/unordered_map.hpp>
 
+//SEMA
+#include <vtkVersion.h>
+#include <vtkSmartPointer.h>
+#include <vtkPointPicker.h>
+#include <vtkSphereSource.h>
+#include <vtkGlyph3D.h>
+#include <vtkPointData.h>
+#include <vtkIdTypeArray.h>
+#include <vtkDataSetSurfaceFilter.h>
+#include <vtkRendererCollection.h>
+#include <vtkProperty.h>
+#include <vtkPlanes.h>
+#include <vtkObjectFactory.h>
+#include <vtkPolyDataMapper.h>
+#include <vtkActor.h>
+#include <vtkRenderWindow.h>
+#include <vtkRenderer.h>
+#include <vtkRenderWindowInteractor.h>
+#include <vtkPolyData.h>
+#include <vtkPointSource.h>
+#include <vtkInteractorStyleTrackballActor.h>
+#include <vtkAreaPicker.h>
+#include <vtkExtractGeometry.h>
+#include <vtkDataSetMapper.h>
+#include <vtkUnstructuredGrid.h>
+#include <vtkVertexGlyphFilter.h>
+#include <vtkIdFilter.h>
+
 /////////////////////////////////////////////////////////////////////////////////////////////
 pcl::visualization::PCLVisualizer::PCLVisualizer (const std::string &name, const bool create_interactor) :
     rens_ (vtkSmartPointer<vtkRendererCollection>::New ()),
@@ -96,6 +124,9 @@ pcl::visualization::PCLVisualizer::PCLVisualizer (const std::string &name, const
     createInteractor ();
 
   win_->SetWindowName (name.c_str ());
+
+  //SEMA
+  editROI = vtkCallbackCommand::New();
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////
@@ -153,6 +184,8 @@ pcl::visualization::PCLVisualizer::PCLVisualizer (int &argc, char **argv, const 
     createInteractor ();
 
   win_->SetWindowName (name.c_str ());
+  //SEMA
+  editROI = vtkCallbackCommand::New();
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////
@@ -180,8 +213,11 @@ pcl::visualization::PCLVisualizer::createInteractor ()
   //interactor_->SetStillUpdateRate (30.0);
   interactor_->SetDesiredUpdateRate (30.0);
 
+
+
   // Initialize and create timer, also create window
   interactor_->Initialize ();
+
 #if ((VTK_MAJOR_VERSION == 5) && (VTK_MINOR_VERSION <= 4))
   interactor_->timer_id_ = interactor_->CreateRepeatingTimer (5000L);
 #else
@@ -1505,6 +1541,456 @@ pcl::visualization::PCLVisualizer::addCube (
   // Save the pointer/ID pair to the global actor map
   (*shape_actor_map_)[id] = actor;
   return (true);
+}
+////////////////////////////////////////////////////////////////////////////////////////////
+// Define interaction style
+class InteractorStyle2 : public vtkInteractorStyleTrackballActor
+{
+  public:
+    static InteractorStyle2* New();
+    vtkTypeMacro(InteractorStyle2,vtkInteractorStyleTrackballActor);
+
+    InteractorStyle2()
+    {
+      this->Move = false;
+      this->PointPicker = vtkSmartPointer<vtkPointPicker>::New();
+
+      // Setup ghost glyph
+      vtkSmartPointer<vtkPoints> points =
+        vtkSmartPointer<vtkPoints>::New();
+      points->InsertNextPoint(0,0,0);
+      this->MovePolyData = vtkSmartPointer<vtkPolyData>::New();
+      this->MovePolyData->SetPoints(points);
+      this->MoveGlyphFilter = vtkSmartPointer<vtkVertexGlyphFilter>::New();
+#if VTK_MAJOR_VERSION <= 5
+      this->MoveGlyphFilter->SetInputConnection(
+        this->MovePolyData->GetProducerPort());
+#else
+      this->MoveGlyphFilter->SetInputData(this->MovePolyData);
+#endif
+      this->MoveGlyphFilter->Update();
+
+      this->MoveMapper = vtkSmartPointer<vtkPolyDataMapper>::New();
+      this->MoveMapper->SetInputConnection(this->MoveGlyphFilter->GetOutputPort());
+
+      //sema
+      this->cube = vtkCubeSource::New();
+      this->cube->SetBounds(0,1,0,1,0,1);
+      this->CubeMapper = vtkSmartPointer<vtkPolyDataMapper>::New();
+      this->CubeMapper->SetInputConnection(this->cube->GetOutputPort());
+      this->CubeActor = vtkSmartPointer<vtkActor>::New();
+      this->CubeActor->SetMapper(this->CubeMapper);
+      this->CubeActor->GetProperty()->SetRepresentationToWireframe ();
+      this->CubeActor->VisibilityOff();
+      this->CubeActor->GetProperty()->SetColor(0,1,0);
+
+      this->MoveActor = vtkSmartPointer<vtkActor>::New();
+      this->MoveActor->SetMapper(this->MoveMapper);
+      this->MoveActor->VisibilityOff();
+      this->MoveActor->GetProperty()->SetPointSize(10);
+      this->MoveActor->GetProperty()->SetColor(0,0,1);
+    }
+
+    void OnMouseMove()
+    {
+//        x1 = this->Data->GetPoint(0)[0];
+//        x2 = this->Data->GetPoint(4)[0];
+
+//        y1 = this->Data->GetPoint(0)[1];
+//        y2 = this->Data->GetPoint(2)[1];
+
+//        z1 = this->Data->GetPoint(0)[2];
+//        z2 = this->Data->GetPoint(1)[2];
+
+      if(!this->Move)
+        {
+        return;
+        }
+
+      if(this->PointPicker->GetPointId() < 0)
+         vtkInteractorStyleTrackballActor::OnMouseMove();
+
+
+    }
+
+    void OnMiddleButtonUp()
+    {
+      this->EndPan();
+
+      this->Move = false;
+      this->MoveActor->VisibilityOff();
+//        this->CubeActor->VisibilityOff();
+
+
+      this->Data->GetPoints()->SetPoint(this->SelectedPoint, this->MoveActor->GetPosition());
+
+      double p[3];
+      this->Data->GetPoint(this->SelectedPoint, p);
+
+      int id = this->SelectedPoint;
+
+
+      if(id==8)
+      {
+          double dx = p[0] - (x2+x1)/2.;
+          x1 += dx/2;
+          x2 += dx/2;
+          double dy = p[1] - (y2+y1)/2.;
+          y1 += dy/2;
+          y2 += dy/2;
+          double dz = p[2] - (z2+z1)/2.;
+          z1 += dz/2;
+          z2 += dz/2;
+      }
+      else
+      {
+          if( id < 4)
+              x1 = p[0];
+          else
+              x2 = p[0];
+          if( id == 0 || id == 1 || id == 4 || id == 5)
+              y1 = p[1];
+          else
+              y2 = p[1];
+          if( id == 0 || id == 2 || id == 4 || id == 6 )
+              z1 = p[2];
+          else
+              z2 = p[2];
+
+      }
+
+      this->Data->GetPoints()->SetPoint(0, x1, y1, z1);
+      this->Data->GetPoints()->SetPoint(1, x1, y1, z2);
+      this->Data->GetPoints()->SetPoint(2, x1, y2, z1);
+      this->Data->GetPoints()->SetPoint(3, x1, y2, z2);
+      this->Data->GetPoints()->SetPoint(4, x2, y1, z1);
+      this->Data->GetPoints()->SetPoint(5, x2, y1, z2);
+      this->Data->GetPoints()->SetPoint(6, x2, y2, z1);
+      this->Data->GetPoints()->SetPoint(7, x2, y2, z2);
+
+      this->Data->GetPoints()->SetPoint(8, (x2+x1)/2., (y2+y1)/2., (z2+z1)/2.);
+
+      this->cube->SetBounds(x1,x2,y1,y2,z1,z2);
+      this->cube->Modified();
+
+      this->Data->Modified();
+
+      this->CubeMapper->SetInputConnection(this->cube->GetOutputPort());
+      this->CubeActor->SetMapper(this->CubeMapper);
+      this->GetCurrentRenderer()->AddActor(this->CubeActor);
+
+      this->GetCurrentRenderer()->Render();
+      this->GetCurrentRenderer()->GetRenderWindow()->Render();
+
+    }
+    void OnMiddleButtonDown()
+    {
+      // Get the selected point
+      int x = this->Interactor->GetEventPosition()[0];
+      int y = this->Interactor->GetEventPosition()[1];
+      this->FindPokedRenderer(x, y);
+
+      this->PointPicker->Pick(this->Interactor->GetEventPosition()[0],
+                 this->Interactor->GetEventPosition()[1],
+                 0,  // always zero.
+                 this->Interactor->GetRenderWindow()->GetRenderers()->GetFirstRenderer());
+
+      if(this->PointPicker->GetPointId() >= 0)
+        {
+        this->StartPan();
+        this->MoveActor->VisibilityOn();
+        this->CubeActor->VisibilityOn();
+        this->Move = true;
+        this->SelectedPoint = this->PointPicker->GetPointId();
+
+        std::cout << "Dragging point " << this->SelectedPoint << std::endl;
+
+        double p[3];
+        this->Data->GetPoint(this->SelectedPoint, p);
+        this->Data->GetPoints()->SetPoint(this->SelectedPoint, this->MoveActor->GetPosition());
+
+
+//        int id = this->SelectedPoint;
+
+//        if(id==8)
+//        {
+//            double dx = p[0] - (x2+x1)/2.;
+//            x1 += dx/2;
+//            x2 += dx/2;
+//            double dy = p[1] - (y2+y1)/2.;
+//            y1 += dy/2;
+//            y2 += dy/2;
+//            double dz = p[2] - (z2+z1)/2.;
+//            z1 += dz/2;
+//            z2 += dz/2;
+//        }
+//        else
+//        {
+//            if( id < 4)
+//                x1 = p[0];
+//            else
+//                x2 = p[0];
+//            if( id == 0 || id == 1 || id == 4 || id == 5)
+//                y1 = p[1];
+//            else
+//                y2 = p[1];
+//            if( id == 0 || id == 2 || id == 4 || id == 6 )
+//                z1 = p[2];
+//            else
+//                z2 = p[2];
+
+//        }
+
+//        this->Data->GetPoints()->SetPoint(0, x1, y1, z1);
+//        this->Data->GetPoints()->SetPoint(1, x1, y1, z2);
+//        this->Data->GetPoints()->SetPoint(2, x1, y2, z1);
+//        this->Data->GetPoints()->SetPoint(3, x1, y2, z2);
+//        this->Data->GetPoints()->SetPoint(4, x2, y1, z1);
+//        this->Data->GetPoints()->SetPoint(5, x2, y1, z2);
+//        this->Data->GetPoints()->SetPoint(6, x2, y2, z1);
+//        this->Data->GetPoints()->SetPoint(7, x2, y2, z2);
+
+//        this->Data->GetPoints()->SetPoint(8, (x2+x1)/2., (y2+y1)/2., (z2+z1)/2.);
+
+//        this->cube->SetBounds(x1,x2,y1,y2,z1,z2);
+//        this->cube->Modified();
+
+//        this->Data->Modified();
+
+
+//        std::cout << "p: " << p[0] << " " << p[1] << " " << p[2] << std::endl;
+//        this->MoveActor->SetPosition(p);
+
+//        this->GetCurrentRenderer()->AddActor(this->MoveActor);
+//        this->CubeMapper->SetInputConnection(this->cube->GetOutputPort());
+//        this->CubeActor->SetMapper(this->CubeMapper);
+//        this->GetCurrentRenderer()->AddActor(this->CubeActor);
+
+        this->GetCurrentRenderer()->Render();
+        this->GetCurrentRenderer()->GetRenderWindow()->Render();
+        this->InteractionProp = this->MoveActor;
+        }
+    }
+
+    //sema
+    vtkCubeSource* cube;
+
+  vtkPolyData* Data;
+  vtkPolyData* GlyphData;
+
+  vtkSmartPointer<vtkPolyDataMapper> MoveMapper;
+  vtkSmartPointer<vtkActor> MoveActor;
+  //sema
+  vtkSmartPointer<vtkPolyDataMapper> CubeMapper;
+  vtkSmartPointer<vtkActor> CubeActor;
+
+  vtkSmartPointer<vtkPolyData> MovePolyData;
+  vtkSmartPointer<vtkVertexGlyphFilter> MoveGlyphFilter;
+
+  vtkSmartPointer<vtkPointPicker> PointPicker;
+
+  bool Move;
+  vtkIdType SelectedPoint;
+
+  //sema
+  float x1,x2,y1,y2,z1,z2;
+};
+vtkStandardNewMacro(InteractorStyle2);
+
+void changeROI (vtkObject* caller, long unsigned int eventId, void* clientData, void* callData  );
+
+bool
+pcl::visualization::PCLVisualizer::addCube (float& x_min, float& x_max,
+                                            float& y_min, float& y_max,
+                                            float& z_min, float& z_max,
+                                            double r, double g, double b,
+                                            const std::string &id, int viewport)
+{
+    // Check to see if this ID entry already exists (has it been already added to the visualizer?)
+    ShapeActorMap::iterator am_it = shape_actor_map_->find (id);
+    if (am_it != shape_actor_map_->end ())
+    {
+      pcl::console::print_warn ("[addCube] A shape with id <%s> already exists! Please choose a different id and retry.\n", id.c_str ());
+      return (false);
+    }
+/*
+//    //////////////////////////////
+//    //SEMA
+
+    vtkSmartPointer<vtkPoints> points =vtkSmartPointer<vtkPoints>::New();
+      points->InsertNextPoint(x_min, y_min, z_min);
+      points->InsertNextPoint(x_min, y_min, z_max);
+      points->InsertNextPoint(x_min, y_max, z_min);
+      points->InsertNextPoint(x_min, y_max, z_max);
+      points->InsertNextPoint(x_max, y_min, z_min);
+      points->InsertNextPoint(x_max, y_min, z_max);
+      points->InsertNextPoint(x_max, y_max, z_min);
+      points->InsertNextPoint(x_max, y_max, z_max);
+
+//      vtkSmartPointer<InteractorStyle2> style =
+//              vtkSmartPointer<InteractorStyle2>::New();
+//      interactor_->SetInteractorStyle( style );
+
+      //cube
+      vtkCubeSource* cube = vtkCubeSource::New();
+      cube->GetOutput()->SetPoints(points);
+//      style->cube = cube;
+
+      vtkSmartPointer<vtkPolyDataMapper> mapper2 =
+              vtkSmartPointer<vtkPolyDataMapper>::New();
+      mapper2->SetInputConnection(cube->GetOutputPort());
+
+      vtkSmartPointer<vtkActor> actor2 =
+              vtkSmartPointer<vtkActor>::New();
+      actor2->SetMapper(mapper2);
+      actor2->GetProperty ()->SetRepresentationToWireframe ();
+      actor2->GetProperty ()->SetColor (r,g,b);
+      addActorToRenderer (actor2, viewport);
+
+
+      points->InsertNextPoint((x_min+x_max)/2., (y_min+y_max)/2., (z_min+z_max)/2.);
+
+      vtkSmartPointer<vtkPolyData> input =
+              vtkSmartPointer<vtkPolyData>::New();
+      input->SetPoints(points);
+
+      vtkSmartPointer<vtkVertexGlyphFilter> glyphFilter =
+              vtkSmartPointer<vtkVertexGlyphFilter>::New();
+#if VTK_MAJOR_VERSION <= 5
+      glyphFilter->SetInputConnection(input->GetProducerPort());
+#else
+      glyphFilter->SetInputData(input);
+#endif
+      glyphFilter->Update();
+
+      vtkSmartPointer<vtkPolyDataMapper> mapper =
+              vtkSmartPointer<vtkPolyDataMapper>::New();
+      mapper->SetInputConnection(glyphFilter->GetOutputPort());
+
+      vtkSmartPointer<vtkActor> actor =
+        vtkSmartPointer<vtkActor>::New();
+      actor->SetMapper(mapper);
+      actor->GetProperty()->SetPointSize(6);
+      actor->GetProperty ()->SetColor (r,g,b);
+      addActorToRenderer (actor, viewport);
+
+
+      style_->Data = input;
+
+//  vtkSmartPointer<vtkActor> actor2 =
+//    vtkSmartPointer<vtkActor>::New();
+//  actor2->SetMapper(mapper);
+//  actor2->GetProperty()->SetPointSize(8);
+//  actor2->GetProperty ()->SetColor (r,g,b);
+//  addActorToRenderer (actor2, 1);
+
+//    vtkSmartPointer<InteractorStyle2> style =
+//                vtkSmartPointer<InteractorStyle2>::New();
+//              interactor_->SetInteractorStyle( style );
+//              style->Data = input;
+
+
+//    vtkSmartPointer<vtkCallbackCommand> clickCallback =
+//        vtkSmartPointer<vtkCallbackCommand>::New();
+//      clickCallback->SetCallback ( changeROI );
+
+//      interactor_->AddObserver ( vtkCommand::RightButtonPressEvent, clickCallback );
+*/
+
+  vtkSmartPointer<vtkDataSet> data = createCube (x_min, x_max, y_min, y_max, z_min, z_max);
+
+//  roi_x1=x_min; roi_x2=x_max;
+//  roi_y1=y_min; roi_y2=y_max;
+//  roi_z1=z_min; roi_z2=z_max;
+
+  // Create an Actor
+  vtkSmartPointer<vtkLODActor> actor;
+  createActorFromVTKDataSet (data, actor);
+  actor->GetProperty ()->SetRepresentationToWireframe ();
+  actor->GetProperty()->SetLineWidth(4);
+  actor->GetProperty ()->SetColor (r,g,b);
+  addActorToRenderer (actor, 0);
+
+
+  // Create a cube
+
+
+
+//  vtkSmartPointer<vtkCallbackCommand> clickCallback =
+//      vtkSmartPointer<vtkCallbackCommand>::New();
+//    clickCallback->SetCallback ( changeROI );
+
+//    interactor_->AddObserver ( vtkCommand::RightButtonPressEvent, clickCallback );
+
+//  interactor_->AddObserver ( vtkCommand::InteractionEvent, editROI );
+
+//  editROI->SetCallback(changeROI);
+//  editROI->SetClientData(this);
+
+
+//  vtkSmartPointer<InteractorStyle2> style =
+//              vtkSmartPointer<InteractorStyle2>::New();
+//            interactor_->SetInteractorStyle( style );
+//            style->Data = input;
+
+
+  // Save the pointer/ID pair to the global actor map
+  (*shape_actor_map_)[id] = actor;
+  return (true);
+}
+
+////SEMA
+
+void changeROI ( vtkObject* caller, long unsigned int eventId, void* clientData, void* callData )
+{
+  std::cout << "Click callback" << std::endl;
+  // Get the interactor like this:
+  // vtkRenderWindowInteractor *iren =
+  //  static_cast<vtkRenderWindowInteractor*>(caller);
+
+  vtkTransform *tr = vtkTransform::New();
+  vtkBoxWidget *widget = reinterpret_cast<vtkBoxWidget*>(caller);
+  widget->GetTransform(tr);
+//  this->transformROI(tr);
+
+}
+//SEMA
+void
+pcl::visualization::PCLVisualizer::transformROI(vtkTransform *t)
+{
+    double *tPosition= new double[3];
+
+            t->GetPosition(tPosition);
+
+    double *tScale= new double[3];
+
+    tScale = t->GetScale();
+
+    double div= 5.0/0.9;
+
+    tScale[0]/=div;
+
+    tScale[1]/=div;
+
+    tScale[2]/=div;
+
+    roi_x1 = tPosition[0]-tScale[0];
+
+    roi_x2 = tPosition[0]+tScale[0];
+
+    roi_y1 = tPosition[1]-tScale[1];
+
+    roi_y2 = tPosition[1]+tScale[1];
+
+    roi_z1 = tPosition[2]-tScale[2];
+
+    roi_z2 = tPosition[2]+tScale[2];
+
+    cout<<roi_x1<<" "<<roi_x2<<endl;
+     cout<<roi_y1<<" "<<roi_y2<<endl;
+      cout<<roi_z1<<" "<<roi_z2<<endl;
+
+
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////
@@ -2882,7 +3368,8 @@ pcl::visualization::FPSCallback::Execute (vtkObject *caller, unsigned long, void
 {
   vtkRenderer *ren = reinterpret_cast<vtkRenderer *> (caller);
   float fps = 1.0 / ren->GetLastRenderTimeInSeconds ();
-  char buf[128];
-  sprintf (buf, "%.1f FPS", fps);
-  actor_->SetInput (buf);
+  //sema
+//  char buf[128];
+//  sprintf (buf, "%.1f FPS", fps);
+//  actor_->SetInput (buf);
 }

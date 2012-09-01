@@ -102,9 +102,13 @@ pcl::gpu::CaptureOpenNI::open (int device)
   impl_.reset ( new Impl () );
 
   XnMapOutputMode mode;
-  mode.nXRes = XN_VGA_X_RES;
-  mode.nYRes = XN_VGA_Y_RES;
-  mode.nFPS = 30;
+//  mode.nXRes = XN_VGA_X_RES;
+//  mode.nYRes = XN_VGA_Y_RES;
+//  mode.nFPS = 30;
+  //sema
+  mode.nXRes = 1280;//XN_VGA_X_RES;
+  mode.nYRes = 1024;//XN_VGA_Y_RES;
+  mode.nFPS = 15;
 
   XnStatus rc;
   rc = impl_->context.Init ();

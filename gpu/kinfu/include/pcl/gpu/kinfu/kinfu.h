@@ -48,6 +48,98 @@
 #include <pcl/point_cloud.h>
 #include <Eigen/Core>
 #include <vector>
+#include <math.h>
+
+/*SEMA
+  */
+#include <string.h>
+#include <time.h>
+#include <pcl/ModelCoefficients.h>
+#include <pcl/io/pcd_io.h>
+#include <pcl/point_types.h>
+#include <pcl/sample_consensus/method_types.h>
+#include <pcl/sample_consensus/model_types.h>
+#include <pcl/segmentation/sac_segmentation.h>
+
+#include <pcl/filters/filter.h>
+#include <pcl/filters/extract_indices.h>
+#include <pcl/registration/icp.h>
+#include <pcl/registration/icp_nl.h>
+#include <pcl/registration/transformation_estimation_point_to_plane_lls.h>
+#include <pcl/registration/transformation_estimation_point_to_plane.h>
+#include <pcl/features/normal_3d.h>
+
+#include <pcl/gpu/kinfu/video_recorder.h>
+
+#include "internal.h"
+#include <pcl/io/ply_io.h>
+
+
+struct HandModel{
+    double sqr(double a) { return a*a;}
+    void reset() {
+        num_samples = 0;
+        cube_dim = 96;
+        scale = (float)cube_dim/256.;
+        mean_rgb[0] = 0., mean_rgb[1] = 0., mean_rgb[2] = 0.;
+        std_dev[0] = 0., std_dev[1] = 0., std_dev[2] = 0.;
+        samples.clear();
+        isset = false;
+
+        color_cube.clear();
+        for(int i=0; i<cube_dim; ++i)
+            color_cube.push_back(std::vector< std::vector< int > >());
+        for(int i=0; i<cube_dim; ++i)
+            for(int j=0; j<cube_dim; ++j)
+                color_cube[i].push_back(std::vector< int >());
+        for(int i=0; i<cube_dim; ++i)
+            for(int j=0; j<cube_dim; ++j)
+                for(int k=0; k<cube_dim; ++k)
+                    color_cube[i][j].push_back(0);
+    }
+    void calculateModel() {
+        num_samples = samples.size();
+        printf("# samples: %d\n", num_samples);
+        if(num_samples<100)
+            return;
+
+        for(int i=0; i<num_samples; ++i)
+        {
+            int u = round(((float)samples[i].r)*scale);
+            int v = round(((float)samples[i].g)*scale);
+            int z = round(((float)samples[i].b)*scale);
+
+            u = std::max(0, std::min(u, cube_dim-1));
+            v = std::max(0, std::min(v, cube_dim-1));
+            z = std::max(0, std::min(z, cube_dim-1));
+
+            if(u<cube_dim && v<cube_dim && z<cube_dim)
+                color_cube[u][v][z] +=1;
+            else
+                printf("%d %d %d\n",u,v,z);
+        }
+        int threshold = 10;//round(num_samples/10000.);
+        for(int i=0; i<cube_dim; ++i)
+            for(int j=0; j<cube_dim; ++j)
+                for(int k=0; k<cube_dim; ++k)
+                    if(color_cube[i][j][k]<threshold)
+                        color_cube[i][j][k] = 0;
+
+        samples.clear();
+        isset = true;
+        printf("hand model is created!\n");
+    }
+
+    float mean_rgb[3];
+    float std_dev[3];
+
+    int cube_dim;
+    float scale;
+    std::vector< std::vector< std::vector< int > > > color_cube;
+    std::vector< PixelRGB > samples;
+    int num_samples;
+    bool isset;
+};
 
 namespace pcl
 {
@@ -74,6 +166,22 @@ namespace pcl
           */
         KinfuTracker (int rows = 480, int cols = 640);
 
+
+        //SEMA
+        // calculate base Plane(a, b, c, d)
+        void getBasePlane ();
+        bool init;
+        ModelCoefficients::Ptr plane_coeffs;
+
+        //SEMA
+        //clean tsdf to extract object in ROI
+        void extractObject(pcl::ModelCoefficients::Ptr box_boundaries,
+                                             pcl::ModelCoefficients::Ptr coefficients);
+
+        //SEMA
+        void
+        reduceTsdfWeights(pcl::ModelCoefficients::Ptr box_boundaries);
+
         /** \brief Sets Depth camera intrinsics
           * \param[in] fx focal length x 
           * \param[in] fy focal length y
@@ -82,6 +190,9 @@ namespace pcl
           */
         void
         setDepthIntrinsics (float fx, float fy, float cx = -1, float cy = -1);
+
+        pcl::device::Intr
+        getDepthIntrinsics () {return device::Intr(fx_, fy_, cx_, cy_);}
 
         /** \brief Sets initial camera pose relative to volume coordiante space
           * \param[in] pose Initial camera pose
@@ -128,14 +239,14 @@ namespace pcl
           * \param[in] Depth next frame with values in millimeters
           * \return true if can render 3D view.
           */
-        bool operator() (const DepthMap& depth);
+        bool operator() (const DepthMap& depth, View& view, bool integrate, bool roi_selected_,  View& rgb24);
 
         /** \brief Processes next frame (both depth and color integration). Please call initColorIntegration before invpoking this.
           * \param[in] depth next depth frame with values in millimeters
           * \param[in] colors next RGB frame
           * \return true if can render 3D view.
           */
-        bool operator() (const DepthMap& depth, const View& colors);
+        bool operator() (const DepthMap& depth, const View& colors, View& view, bool integrate, bool roi_selected_,  View& rgb24);
 
         /** \brief Returns camera pose at given time, default the last pose
           * \param[in] time Index of frame for which camera pose is returned.
@@ -143,6 +254,17 @@ namespace pcl
           */
         Eigen::Affine3f
         getCameraPose (int time = -1) const;
+
+        //sema
+        pcl::device::Mat33&
+        getCameraRot (int time=-1);
+        pcl::device::Mat33&
+        getCameraRotInverse (int time=-1);
+        float3&
+        getCameraTrans (int time=-1) ;
+
+        std::vector< pcl::device::Mat33 > r_inv_;
+        std::vector< float3 > t_;
 
         /** \brief Returns number of poses including initial */
         size_t
@@ -164,7 +286,7 @@ namespace pcl
           * \param[out] view output array with image
           */
         void
-        getImage (View& view) const;
+        getImage (View& view);
         
         /** \brief Returns point cloud abserved from last camera pose
           * \param[out] cloud output array for points
@@ -177,11 +299,60 @@ namespace pcl
           */
         void
         getLastFrameNormals (DeviceArray2D<NormalType>& normals) const;
+///////////////////////////
+        //SEMA
+        /** \brief Returns point cloud observed from current frame
+          * \param[out] cloud output array for points
+          */
+        void
+        getCurrentFrameCloud (DeviceArray2D<PointType>& cloud) const;
 
+        /** \brief Performs the tracker reset to initial  state. It's used if case of camera tracking fail.
+          */
+        void
+        reset ();
+
+        //SEMA
+        void calculateImageRegistrationSIFT();
+        void setROI(pcl::ModelCoefficients::Ptr box_boundaries);
+
+        void raw_depth_to_bilateraled();
+
+        bool reconstructWithModelProxy (PointCloud<PointXYZ>::Ptr cloud, int ctrl);
+        bool reconstructWithModelProxy2 (PointCloud<PointXYZ>::Ptr cloud, int ctrl=1);
+
+        bool reconstructWithModelProxy_NonLinearICP (PointCloud<PointXYZ>::Ptr cloud, int ctrl);
+
+        //save time when roi is set
+        int roi_selection_time;
+        void set_ROI_selection_time() {roi_selection_time = global_time_;}
+
+        // set the camera position to a previous stable position
+        void stabilizeCameraPosition();
+        int stable_global_time;
+
+        TsdfVolume::Ptr tsdf_volume_;
+        PointCloud<PointXYZ>::Ptr cloud_all;
+        PointCloud<PointXYZ>::Ptr cloud_curr;
+
+        ModelCoefficients::Ptr roi_boundaries_;
+        std::vector<DeviceArray2D<float> > vmaps_;
+        std::vector<DeviceArray2D<float> > nmaps_;
+
+        std::vector<  std::vector<ushort> > depth_images;
+        std::vector<  std::vector<ushort> > depth_raw_images;
+
+
+        cv::Mat rgb_prev;
+        cv::Mat rgb_curr;
+
+        HandModel hand;
+        bool ishand;
+/////////////////////////////
       private:
         
         /** \brief Number of pyramid levels */
-        enum { LEVELS = 3 };
+        enum { LEVELS = 1 };
 
         /** \brief ICP Correspondences  map type */
         typedef DeviceArray2D<int> CorespMap;
@@ -206,7 +377,7 @@ namespace pcl
         float fx_, fy_, cx_, cy_;
 
         /** \brief Tsdf volume container. */
-        TsdfVolume::Ptr tsdf_volume_;
+//        TsdfVolume::Ptr tsdf_volume_;
         ColorVolume::Ptr color_volume_;
                 
         /** \brief Initial camera rotation in volume coo space. */
@@ -239,6 +410,10 @@ namespace pcl
         /** \brief Normal maps pyramid for current frame in current coordinate space. */
         std::vector<MapArr> nmaps_curr_;
 
+        //sema
+         MapArr vmap_save, nmap_save;
+         bool isICPfail;
+
         /** \brief Array of buffers with ICP correspondences for each pyramid level. */
         std::vector<CorespMap> coresps_;
         
@@ -256,6 +431,12 @@ namespace pcl
         /** \brief Array of camera translations for each moment of time. */
         std::vector<Vector3f>   tvecs_;
 
+        /** \brief Array of camera rotation matrices for each moment of time. */
+        std::vector<Matrix3frm> rmats_icp, rmats_icp_nl;
+
+        /** \brief Array of camera translations for each moment of time. */
+        std::vector<Vector3f>   tvecs_icp, tvecs_icp_nl;
+
         /** \brief Camera movement threshold. TSDF is integrated iff a camera movement metric exceedes some value. */
         float integration_metric_threshold_;
         
@@ -266,10 +447,30 @@ namespace pcl
         void
         allocateBufffers (int rows_arg, int cols_arg);
 
-        /** \brief Performs the tracker reset to initial  state. It's used if case of camera tracking fail.
-          */
-        void
-        reset ();       
+//        /** \brief Performs the tracker reset to initial  state. It's used if case of camera tracking fail.
+//          */
+//        void
+//        reset ();
+
+        //SEMA
+        void reset_plane_coeffs();
+
+        View raycast_view;
+
+        Matrix3frm stable_Rcam_;
+        Vector3f   stable_tcam_;
+
+        float scale_factor;
+    public:
+        //SEMA
+        void setCameraPose(Matrix3frm R, Vector3f t);
+        void init_rmats_icp();
+        void setScaleFactor(float d){scale_factor = d;}
+
+        void addCurrentPtCloud(View& view);
+
+        void revert_rmats_();
+
     };
   }
 };

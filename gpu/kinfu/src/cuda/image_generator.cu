@@ -70,7 +70,9 @@ namespace pcl
         v.x = vmap.ptr (y)[x];
         n.x = nmap.ptr (y)[x];
 
-        uchar3 color = make_uchar3 (0, 0, 0);
+//        uchar3 color = make_uchar3 (0, 0, 0);
+        //SEMA
+        uchar3 color = dst.ptr (y)[x];
 
         if (!isnan (v.x) && !isnan (n.x))
         {
@@ -91,7 +93,9 @@ namespace pcl
 
           int br = (int)(205 * weight) + 50;
           br = max (0, min (255, br));
-          color = make_uchar3 (br, br, br);
+
+          //SEMA
+          color = make_uchar3 (br*color.x/255, br*color.y/255, 0);
         }
         dst.ptr (y)[x] = color;
       }
@@ -101,6 +105,47 @@ namespace pcl
     generateImageKernel (const ImageGenerator ig) {
       ig ();
     }
+
+    //SEMA
+    __global__ void
+    removeNonobjectKernel (PtrStepSz<ushort> src, PtrStepSz<uchar3> view) {
+        int x = threadIdx.x + blockIdx.x * blockDim.x;
+        int y = threadIdx.y + blockIdx.y * blockDim.y;
+
+        if (x >= src.cols || y >= src.rows)
+          return;
+
+        int x2 = threadIdx.x + blockIdx.x * 32;
+        int y2 = threadIdx.y + blockIdx.y * 8;
+
+        if (x2 >= view.cols || y2 >= view.rows)
+          return;
+
+        uchar3 color = view.ptr (y)[x];
+        if( color.x == 0 && color.y == 0 && color.z == 0)
+            src.ptr (y)[x] = 0;
+    }
+
+    //sema
+    __global__ void
+    addPtCloudKernel (PtrStep<float> vmap, PtrStepSz<uchar3> view) {
+        int x = threadIdx.x + blockIdx.x * 32;
+        int y = threadIdx.y + blockIdx.y * 8;
+
+        if (x >= view.cols || y >= view.rows)
+          return;
+
+        float3 vcurr;
+        vcurr.x = vmap.ptr (y)[x];
+
+        if (isnan (vcurr.x))
+          return;
+
+//        float3 v_g = R * vcurr + t;
+
+        view.ptr (y)[x] = make_uchar3(0,0,255);
+    }
+
   }
 }
 
@@ -115,6 +160,7 @@ pcl::device::generateImage (const MapArr& vmap, const MapArr& nmap, const LightS
   ig.light = light;
   ig.dst = dst;
 
+
   dim3 block (ImageGenerator::CTA_SIZE_X, ImageGenerator::CTA_SIZE_Y);
   dim3 grid (divUp (dst.cols, block.x), divUp (dst.rows, block.y));
 
@@ -122,6 +168,19 @@ pcl::device::generateImage (const MapArr& vmap, const MapArr& nmap, const LightS
   cudaSafeCall (cudaGetLastError ());
   cudaSafeCall (cudaDeviceSynchronize ());
 } 
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//SEMA
+void
+pcl::device::removeNonobjectPoints(DepthMap& depth, PtrStepSz<uchar3> view)
+{
+    dim3 block (32, 8);
+    dim3 grid (divUp (depth.cols (), block.x), divUp (depth.rows (), block.y));
+
+  removeNonobjectKernel<<<grid, block>>>(depth, view);
+
+  cudaSafeCall ( cudaGetLastError () );
+}
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -211,4 +270,17 @@ pcl::device::paint3DView(const PtrStep<uchar3>& colors, PtrStepSz<uchar3> dst, f
   paint3DViewKernel<<<grid, block>>>(colors, dst, colors_weight);
   cudaSafeCall (cudaGetLastError ());
   cudaSafeCall (cudaDeviceSynchronize ());  
+}
+
+//sema
+void
+pcl::device::addCurrentPointCloudOnRaycast(const MapArr& vmap, PtrStepSz<uchar3> view)
+{
+    dim3 block (32, 8);
+    dim3 grid (divUp (view.cols, block.x), divUp (view.rows, block.y));
+
+    addPtCloudKernel<<<grid, block>>>(vmap, view);
+
+    cudaSafeCall (cudaGetLastError ());
+    cudaSafeCall (cudaDeviceSynchronize ());
 }

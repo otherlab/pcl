@@ -1,7 +1,7 @@
 set(SUBSYS_NAME gpu_kinfu)
 set(SUBSYS_PATH gpu/kinfu)
 set(SUBSYS_DESC "Kinect Fusion implementation")
-set(SUBSYS_DEPS common visualization io gpu_containers gpu_utils gpu_features)
+set(SUBSYS_DEPS common visualization io segmentation kdtree octree features search registration filters sample_consensus gpu_containers gpu_utils gpu_features )
 
 set(build FALSE)
 PCL_SUBSYS_OPTION(build ${SUBSYS_NAME} ${SUBSYS_DESC} ON)
@@ -11,7 +11,7 @@ mark_as_advanced("BUILD_${SUBSYS_NAME}")
 
 if (build)
 	#find_package(OpenCV QUIET)
-	set(OpenCV_FOUND 0)
+	#set(OpenCV_FOUND 0)
 
 	if(OpenCV_FOUND)
 		add_definitions(-DHAVE_OPENCV)	
@@ -61,7 +61,7 @@ if (build)
 	endif()
 	 
 	PCL_ADD_LIBRARY(${LIB_NAME} ${SUBSYS_NAME} ${srcs} ${incs} ${cuda} ${cuda_objs})
-	target_link_libraries(${LIB_NAME} pcl_gpu_utils pcl_gpu_containers pcl_gpu_octree)
+	target_link_libraries(${LIB_NAME} pcl_segmentation pcl_features pcl_filters pcl_sample_consensus pcl_gpu_utils pcl_gpu_containers pcl_gpu_octree pcl_kdtree pcl_search pcl_registration)
 			
 	if(OpenCV_FOUND)
 		target_link_libraries(${LIB_NAME} ${OpenCV_LIBS})

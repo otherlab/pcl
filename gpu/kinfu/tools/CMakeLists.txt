@@ -20,7 +20,7 @@ if(OPENNI_FOUND)
 	source_group("Source Files" FILES ${srcs} )
 
 	PCL_ADD_EXECUTABLE(${the_target} ${SUBSYS_NAME} ${srcs} ${hdrs})
-	target_link_libraries(${the_target} pcl_common pcl_io ${OPENNI_LIBRARIES} pcl_visualization pcl_gpu_kinfu)  
+	target_link_libraries(${the_target} pcl_common pcl_io ${OPENNI_LIBRARIES} pcl_visualization pcl_segmentation pcl_registration pcl_sample_consensus pcl_gpu_kinfu)  
   
 	if(OpenCV_FOUND)
 		target_link_libraries(${the_target} ${OpenCV_LIBS})
@@ -29,6 +29,10 @@ if(OPENNI_FOUND)
 	## RECORD TSDFVOLUME
 	set(the_target record_tsdfvolume)
 	set(srcs record_tsdfvolume.cpp capture.cpp)
+
+## coarse alignment
+	set(the_target coarse_alignment)
+	set(srcs coarse_alignment.cpp)
 
 	PCL_ADD_EXECUTABLE(${the_target} ${SUBSYS_NAME} ${srcs} ${hdrs})
 	target_link_libraries(${the_target} pcl_common pcl_io ${OPENNI_LIBRARIES} pcl_visualization pcl_gpu_kinfu)  

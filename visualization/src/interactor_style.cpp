@@ -93,6 +93,34 @@ pcl::visualization::PCLVisualizerInteractorStyle::Initialize ()
   // Add our own mouse callback before any user callback. Used for accurate point picking.
   mouse_callback_ = vtkSmartPointer<pcl::visualization::PointPickingCallback>::New ();
   AddObserver (vtkCommand::LeftButtonPressEvent, mouse_callback_);
+
+  //sema
+  this->Move = false;
+        this->PointPicker = vtkSmartPointer<vtkPointPicker>::New();
+
+        // Setup ghost glyph
+        vtkSmartPointer<vtkPoints> points =
+          vtkSmartPointer<vtkPoints>::New();
+        points->InsertNextPoint(0,0,0);
+        this->MovePolyData = vtkSmartPointer<vtkPolyData>::New();
+        this->MovePolyData->SetPoints(points);
+        this->MoveGlyphFilter = vtkSmartPointer<vtkVertexGlyphFilter>::New();
+  #if VTK_MAJOR_VERSION <= 5
+        this->MoveGlyphFilter->SetInputConnection(
+          this->MovePolyData->GetProducerPort());
+  #else
+        this->MoveGlyphFilter->SetInputData(this->MovePolyData);
+  #endif
+        this->MoveGlyphFilter->Update();
+
+        this->MoveMapper = vtkSmartPointer<vtkPolyDataMapper>::New();
+        this->MoveMapper->SetInputConnection(this->MoveGlyphFilter->GetOutputPort());
+
+        this->MoveActor = vtkSmartPointer<vtkActor>::New();
+        this->MoveActor->SetMapper(this->MoveMapper);
+        this->MoveActor->VisibilityOff();
+        this->MoveActor->GetProperty()->SetPointSize(10);
+        this->MoveActor->GetProperty()->SetColor(1,0,0);
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -769,6 +797,14 @@ pcl::visualization::PCLVisualizerInteractorStyle::OnMouseMove ()
   MouseEvent event (MouseEvent::MouseMove, MouseEvent::NoButton, x, y, Interactor->GetAltKey (), Interactor->GetControlKey (), Interactor->GetShiftKey ());
   mouse_signal_ (event);
   Superclass::OnMouseMove ();
+
+//  if(!this->Move)
+//          {
+//          return;
+//          }
+
+//vtkInteractorStyleTrackballCamera::OnMouseMove();
+
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -807,30 +843,68 @@ pcl::visualization::PCLVisualizerInteractorStyle::OnLeftButtonUp ()
 void
 pcl::visualization::PCLVisualizerInteractorStyle::OnMiddleButtonDown ()
 {
-  int x = this->Interactor->GetEventPosition()[0];
-  int y = this->Interactor->GetEventPosition()[1];
-  if (Interactor->GetRepeatCount () == 0)
-  {
-    MouseEvent event (MouseEvent::MouseButtonPress, MouseEvent::MiddleButton, x, y, Interactor->GetAltKey (), Interactor->GetControlKey (), Interactor->GetShiftKey ());
-    mouse_signal_ (event);
-  }
-  else
-  {
-    MouseEvent event (MouseEvent::MouseDblClick, MouseEvent::MiddleButton, x, y, Interactor->GetAltKey (), Interactor->GetControlKey (), Interactor->GetShiftKey ());
-    mouse_signal_ (event);
-  }
-  Superclass::OnMiddleButtonDown ();
+    cout<<"freager"<<endl;
+//  int x = this->Interactor->GetEventPosition()[0];
+//  int y = this->Interactor->GetEventPosition()[1];
+
+//  if (Interactor->GetRepeatCount () == 0)
+//  {
+//    MouseEvent event (MouseEvent::MouseButtonPress, MouseEvent::MiddleButton, x, y, Interactor->GetAltKey (), Interactor->GetControlKey (), Interactor->GetShiftKey ());
+//    mouse_signal_ (event);
+//  }
+//  else
+//  {
+//    MouseEvent event (MouseEvent::MouseDblClick, MouseEvent::MiddleButton, x, y, Interactor->GetAltKey (), Interactor->GetControlKey (), Interactor->GetShiftKey ());
+//    mouse_signal_ (event);
+//  }
+//  Superclass::OnMiddleButtonDown ();
+    // Get the selected point
+          int x = this->Interactor->GetEventPosition()[0];
+          int y = this->Interactor->GetEventPosition()[1];
+          this->FindPokedRenderer(x, y);
+
+          this->PointPicker->Pick(this->Interactor->GetEventPosition()[0],
+                     this->Interactor->GetEventPosition()[1],
+                     0,  // always zero.
+                     this->Interactor->GetRenderWindow()->GetRenderers()->GetFirstRenderer());
+
+          if(this->PointPicker->GetPointId() >= 0)
+            {
+            this->StartPan();
+            this->MoveActor->VisibilityOn();
+            this->Move = true;
+            this->SelectedPoint = this->PointPicker->GetPointId();
+
+            std::cout << "Dragging point " << this->SelectedPoint << std::endl;
+
+            double p[3];
+            this->Data->GetPoint(this->SelectedPoint, p);
+            std::cout << "p: " << p[0] << " " << p[1] << " " << p[2] << std::endl;
+            this->MoveActor->SetPosition(p);
+
+            this->GetCurrentRenderer()->AddActor(this->MoveActor);
+//            this->InteractionProp = this->MoveActor;
+            }
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////
 void
 pcl::visualization::PCLVisualizerInteractorStyle::OnMiddleButtonUp ()
 {
-  int x = this->Interactor->GetEventPosition()[0];
-  int y = this->Interactor->GetEventPosition()[1];
-  MouseEvent event (MouseEvent::MouseButtonRelease, MouseEvent::MiddleButton, x, y, Interactor->GetAltKey (), Interactor->GetControlKey (), Interactor->GetShiftKey ());
-  mouse_signal_ (event);
-  Superclass::OnMiddleButtonUp ();
+//  int x = this->Interactor->GetEventPosition()[0];
+//  int y = this->Interactor->GetEventPosition()[1];
+//  MouseEvent event (MouseEvent::MouseButtonRelease, MouseEvent::MiddleButton, x, y, Interactor->GetAltKey (), Interactor->GetControlKey (), Interactor->GetShiftKey ());
+//  mouse_signal_ (event);
+//  Superclass::OnMiddleButtonUp ();
+    this->EndPan();
+
+          this->Move = false;
+          this->MoveActor->VisibilityOff();
+
+          this->Data->GetPoints()->SetPoint(this->SelectedPoint, this->MoveActor->GetPosition());
+          this->Data->Modified();
+          this->GetCurrentRenderer()->Render();
+          this->GetCurrentRenderer()->GetRenderWindow()->Render();
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////

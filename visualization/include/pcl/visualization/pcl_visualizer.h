@@ -73,6 +73,12 @@ namespace pcl
         typedef ColorHandler::Ptr ColorHandlerPtr;
         typedef ColorHandler::ConstPtr ColorHandlerConstPtr;
 
+        //SEMA
+        vtkCallbackCommand *editROI;
+        float roi_x1, roi_x2, roi_y1, roi_y2, roi_z1, roi_z2;
+
+        void transformROI(vtkTransform *tr);
+
         /** \brief PCL Visualizer constructor.
           * \param[in] name the window name (empty by default)
           * \param[in] create_interactor if true (default), create an interactor, false otherwise
@@ -1242,6 +1248,12 @@ namespace pcl
                  double width, double height, double depth,
                  const std::string &id = "cube",
                  int viewport = 0);
+
+        bool
+        addCube (float& x_min, float& x_max,
+                 float& y_min, float& y_max,
+                 float& z_min, float& z_max,
+                 double r = 1.0, double g = 1.0, double b = 1.0, const std::string &id = "cube", int viewport = 0);
 
         /** \brief Changes the visual representation for all actors to surface representation. */
         void

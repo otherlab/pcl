@@ -41,6 +41,9 @@
 #include <pcl/gpu/containers/device_array.h>
 #include <pcl/gpu/utils/safe_call.hpp>
 
+//SEMA
+#include <pcl/ModelCoefficients.h>
+
 namespace pcl
 {
   namespace device
@@ -59,7 +62,7 @@ namespace pcl
     enum { VOLUME_X = 512, VOLUME_Y = 512, VOLUME_Z = 512 };
 
 	
-    const float VOLUME_SIZE = 3.0f; // in meters
+    const float VOLUME_SIZE = 1.0f; // in meters : 3.0
 
     /** \brief Camera intrinsics structure
       */ 
@@ -91,6 +94,14 @@ namespace pcl
       int number;
     };
 
+    //SEMA
+    //eliminates points which are on the ground plane
+    void
+    eliminatePointsOnGround (DepthMap& src, MapArr& vmap, ModelCoefficients plane_coeffs);
+    //SEMA
+    void
+    removeNonobjectPoints(DepthMap& depth, PtrStepSz<uchar3> view);
+
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // Maps
   
@@ -99,7 +110,11 @@ namespace pcl
       * \param[out] dst output map
       */
     void 
-    bilateralFilter (const DepthMap& src, DepthMap& dst);
+    bilateralFilter (const DepthMap& src, DepthMap& dst, float trunc_dist = 5.0f, float scale_factor=1.0);
+
+    //sema
+    void
+    blurFilter (const DepthMap& src, DepthMap& dst);
     
 	/** \brief Computes depth pyramid
       * \param[in] src source
@@ -122,6 +137,19 @@ namespace pcl
       */
     void 
     createNMap (const MapArr& vmap, MapArr& nmap);
+
+    //sema
+    void
+    eliminateVMapIfNotPerpendicular ( MapArr& vmap, MapArr& nmap, DepthMap &depth1, DepthMap &depth2);
+    void
+    eliminateVMapIfNotPerpendicular ( MapArr& vmap, MapArr& nmap);
+    void
+    maskRGB (DepthMap& depth, PtrStepSz<uchar3> rgb24, float trunct_dist = INFINITY);
+    void
+    erode(DepthMap& depth_src, DepthMap& depth_dest);
+
+    void
+    addCurrentPointCloudOnRaycast(const MapArr& vmap, PtrStepSz<uchar3> view);
     
 	/** \brief Computes normal map using Eigen/PCA approach
       * \param[in] vmap vertex map
@@ -146,8 +174,11 @@ namespace pcl
       * \param[in] max_distance truncation threshold, values that are higher than the threshold are reset to zero (means not measurement)
       */
 	void 
-	truncateDepth(DepthMap& depth, float max_distance);
+    truncateDepth(DepthMap& depth, float max_distance, float scale_factor);
 
+    //sema
+    void
+    scaleRawDepth(const DepthMap& src, DepthMap& tgt, float max_distance_mm, float scaleFactor);
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     //   ICP 
             
@@ -220,6 +251,12 @@ namespace pcl
     PCL_EXPORTS void
     initVolume(PtrStep<short2> array);
 
+    //SEMA
+    PCL_EXPORTS void
+    cutVolume(PtrStep<short2> array, pcl::ModelCoefficients::Ptr box_boundaries, pcl::ModelCoefficients::Ptr plane_coeffs);
+    PCL_EXPORTS void
+    reduceVolumeWeights (PtrStep<short2> volume, pcl::ModelCoefficients::Ptr box_boundaries);
+
     //first version
     /** \brief Performs Tsfg volume uptation (extra obsolete now)
       * \param[in] depth_raw Kinect depth image
@@ -246,8 +283,8 @@ namespace pcl
       * \param[out] depthRawScaled Buffer for scaled depth along ray
       */
     PCL_EXPORTS void 
-    integrateTsdfVolume (const PtrStepSz<ushort>& depth_raw, const Intr& intr, const float3& volume_size, 
-                         const Mat33& Rcurr_inv, const float3& tcurr, float tranc_dist, PtrStep<short2> volume, DeviceArray2D<float>& depthRawScaled);
+    integrateTsdfVolume (const PtrStepSz<ushort>& depth_raw, const Intr& intr, const float3& volume_size,
+                         const Mat33& Rcurr_inv, const Mat33 &Rcurr_, const float3 &tcurr, float tranc_dist, PtrStep<short2> volume, DeviceArray2D<float> &depthScaled, pcl::ModelCoefficients::Ptr box_boundaries, bool roi_selected, MapArr &nmap);
     
     /** \brief Initialzied color volume
       * \param[out] color_volume color volume for initialization
@@ -271,6 +308,16 @@ namespace pcl
     updateColorVolume(const Intr& intr, float tranc_dist, const Mat33& R_inv, const float3& t, const MapArr& vmap, 
             const PtrStepSz<uchar3>& colors, const float3& volume_size, PtrStep<uchar4> color_volume, int max_weight = 1);
 
+    //sema
+    void
+    integrateColorFromRGB (PtrStepSz<uchar3> rgb, const Intr& intr,
+                                      const float3& volume_size, const Mat33& Rcurr_inv, const float3& tcurr,
+                                      float tranc_dist,
+                                      const MapArr& vmap, const MapArr &nmap, PtrSz<PointType> cloud, uchar4 *color_cloud, size_t sz);
+
+    void
+    setBlack ( uchar4* color_cloud, size_t sz);
+
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // Raycast and view generation        
     /** \brief Generation vertex and normal maps from volume for current camera pose
@@ -285,7 +332,7 @@ namespace pcl
       */
     void 
     raycast (const Intr& intr, const Mat33& Rcurr, const float3& tcurr, float tranc_dist, const float3& volume_size, 
-             const PtrStep<short2>& volume, MapArr& vmap, MapArr& nmap);
+             const PtrStep<short2>& volume, MapArr& vmap, MapArr& nmap, PtrStepSz<uchar3> view, PtrStepSz<uchar3> rgb);
 
     /** \brief Renders 3D image of the scene
       * \param[in] vmap vetex map
@@ -339,6 +386,9 @@ namespace pcl
       */ 
     PCL_EXPORTS size_t 
     extractCloud (const PtrStep<short2>& volume, const float3& volume_size, PtrSz<PointType> output);
+    //sema
+    PCL_EXPORTS void
+    postProcessTsdf ( PtrStep<short2> volume);
 
     /** \brief Performs normals computation for given poins using tsdf volume
       * \param[in] volume tsdf volume
