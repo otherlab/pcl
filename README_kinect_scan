@@ -1,0 +1,24 @@
+------------------------------------------------------
+Usage of the 3d scanning tool with Microsoft Kinect
+------------------------------------------------------
+- Open "kinfu_project.pro" on desktop.
+- Run the project (shortcut: Ctrl+R)
+- To create a hand model, hold your hands in front of kinect for a few seconds press "Space Bar" to complete the hand model.
+- Click on the window with the title of "View3D from ray tracing" and press "M"
+- Hold the object that you want to scan in fornt of the kinect.
+- To reset the 3d model press "R".
+- To save the model and quit the application press "Esc".
+
+------------------------------------------------------
+Ouput formats
+------------------------------------------------------
+output directory:   /home/sema/Desktop/Link to pcl-trunk/build/outputs
+ 
+- depth: folder contains all bilateral filtered depth images (multiplied with 2^6)
+- depth_raw: folder contains all raw depth images (multiplied with 2^6)
+- rgb: folder contains all rgb images from kinect (1280x1024) - masked based depth map(foreground segmentation)
+- _original.ply : resulting mesh file
+- cam_pos_1.txt : camera position of each frame (for _original.ply)
+- icp_plane0.ply: resulting mesh file after re-registering all depth frames to the model
+- cam_pos_2.txt : camera position of each frame (for icp_plane0.ply)
+
